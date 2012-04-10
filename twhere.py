@@ -70,6 +70,7 @@ class DiscreteTxC(object):
         for tr in tr_iter:
             self.data = np.append(self.data, [self.parser.parse_trail(tr)], 0)
         self.model = MemoryCFModel(self.data, lambda ent, ents: batchsim(ent, ents, cos_NB), lincombine)
+        logging.info('Train finished!')
 
     def predict(self, trail, time):
         """ predict a trail of stay at `time`
@@ -87,7 +88,6 @@ class DiscreteTxC(object):
             ref, t = self.parser.columnfunc(tr[-1])
             prefix = tr[:-1]
             rank = self.predict(prefix, t)
-            print rank
             result[idx] = rank.index(self.parser.namespace[ref])
         return result
 
@@ -102,7 +102,7 @@ def cv_folds(fold, table, city):
                             from %s as c
                                 left join checkins_place as p
                                 on c.pid = p.id
-                            where c.isbot is null # and p.city='%s'
+                            where c.isbot is null and p.city='%s'
                             order by c.uid, c.created_at''' %
                             (table, city))
     trainset = list()
@@ -127,13 +127,14 @@ def experiment():
     """
     cur = conn.cursor(cursorclass=sql.cursors.DictCursor)
     cur.execute('select distinct id from category')
+    parser = CategoriesX24h([c['id'] for c in cur])
     logging.info('Reading data...')
     for trainset, testset in cv_folds(10, 'checkins_6', sys.argv[1]):
-        m = DiscreteTxC()
+        m = DiscreteTxC(parser)
         logging.info('Training...')
-        m.train(trainset)
+        m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
         logging.info('Testing...')
-        for e in m.evaluate(testset):
+        for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id'])]):
             print e
 
 
@@ -173,7 +174,8 @@ def test_model():
 def test():
     """ Test
     """
-    test_model()
+    #test_model()
+    experiment()
 
 if __name__ == '__main__':
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)

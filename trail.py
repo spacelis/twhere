@@ -3,8 +3,7 @@
 """File: trail.py
 Description:
     Generating Trails
-History:
-    0.1.0 The first version.
+History: 0.1.0 The first version.
 """
 __version__ = '0.1.0'
 __author__ = 'SpaceLis'
@@ -42,6 +41,9 @@ def test():
         print t
 
 if __name__ == '__main__':
+    import sys
+    print sys.path
+    print 'Test'
     test()
 
 

@@ -9,14 +9,15 @@ History:
 __version__ = '0.1.0'
 __author__ = 'SpaceLis'
 
-import site
-site.addsitedir('.')
 import logging
 import sys
 
 import MySQLdb as sql
-import numpy as np
-from model.colfilter import MemoryCFModel, cos_NB, lincombine, batchsim
+import numpy as NP
+from model.colfilter import MemoryCFModel
+from model.colfilter import JaccardSimilarity_GPU
+from model.colfilter import CosineSimilarity_GPU
+from model.colfilter import LinearCombination
 
 from trail import TrailGen
 
@@ -26,69 +27,106 @@ conn = sql.connect(user='root',
 
 
 class CategoriesX24h(object):
-    """ a collection of method for parsing trails into items
+    """ Parsing a sequence of check-ins into a staying matrix with each element
+        indicating whether user stayed at the place at the time.
     """
-    def __init__(self, categories):
+    def __init__(self, categories, div=1, iscumulative=False):
         self.namespace = [i for i in categories]
+        self.div = div
 
     def size(self):
-        return len(self.namespace), 24
+        return len(self.namespace), 24 / self.div
 
     def parse_trail(self, trail):
         """ Parse a trail into a matrix
         """
-        tmp = np.zeros((len(self.namespace), 24), dtype=np.float32)
-        tmp.fill(np.float32('nan'))
+        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
+        #tmp.fill(NP.float32('nan'))
         for c in trail:
             i, j = self.columnfunc(c)
             tmp[i, j] = 1
         return tmp.flatten()
 
-    @staticmethod
-    def scale(tick):
-        return str(tick.hour)
+    def scale(self, tick):
+        return str(tick.hour / self.div)
 
     def columnfunc(self, checkin):
-        return self.namespace.index(checkin['poi']), CategoriesX24h.scale(checkin['tick'])
+        return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
+
+
+class CategoriesX24cu(object):
+    """ Parsing a sequence of check-ins into a staying matrix with each element
+        indicating the number of times of check-ins.
+    """
+    def __init__(self, categories, div=1):
+        self.namespace = [i for i in categories]
+        self.div = div
+
+    def size(self):
+        return len(self.namespace), 24 / self.div
+
+    def parse_trail(self, trail):
+        """ Parse a trail into a matrix
+        """
+        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
+        #tmp.fill(NP.float32('nan'))
+        for c in trail:
+            i, j = self.columnfunc(c)
+            tmp[i, j] = tmp[i, j] + 1
+        tmp = tmp.flatten()
+        return tmp
+
+    def scale(self, tick):
+        return str(tick.hour / self.div)
+
+    def columnfunc(self, checkin):
+        return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
 
 
 class DiscreteTxC(object):
     """ A trail is treated as a set of (Place, Time) items representing a staying at a place
         and the time dimension is discrete as hours.
     """
-    def __init__(self, parser):
+    def __init__(self, parser, simnum=50):
         super(DiscreteTxC, self).__init__()
         self.parser = parser
         self.data = None
         self.model = None
+        self.simnum = simnum
 
     def train(self, trails):
         """ Parse trails in to arrays so that they can be used in CF
         """
-        tr_iter = iter(trails)
-        self.data = np.array([self.parser.parse_trail(tr_iter.next())])
-        for tr in tr_iter:
-            self.data = np.append(self.data, [self.parser.parse_trail(tr)], 0)
-        self.model = MemoryCFModel(self.data, lambda ent, ents: batchsim(ent, ents, cos_NB), lincombine)
-        logging.info('Train finished!')
+        data = list()
+        for tr in trails:
+            data.append(self.parser.parse_trail(tr))
+        self.data = NP.array(data, dtype=NP.float32)
+        logging.info('%s values loaded in the model' % (self.data.shape,))
+        self.model = MemoryCFModel(self.data, CosineSimilarity_GPU, LinearCombination)
+        #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
 
     def predict(self, trail, time):
         """ predict a trail of stay at `time`
         """
         ent = self.parser.parse_trail(trail)
-        _ent = self.model.estimate(ent)
+        _ent = self.model.estimate(ent, num=self.simnum)
         p = _ent.reshape(self.parser.size())[:, time]
-        return [self.parser.namespace[i] for i in np.argsort(p)][::-1]
+        return [self.parser.namespace[i] for i in NP.argsort(p)][::-1]
 
     def evaluate(self, trails):
         """ evaluate the model using a set of `trails`
         """
-        result = np.zeros(len(trails), dtype=np.int32)
+        result = NP.zeros(len(trails), dtype=NP.int32)
         for idx, tr in enumerate(trails):
-            ref, t = self.parser.columnfunc(tr[-1])
-            prefix = tr[:-1]
-            rank = self.predict(prefix, t)
-            result[idx] = rank.index(self.parser.namespace[ref])
+            with NP.errstate(divide='raise'):
+                try:
+                    ref, t = self.parser.columnfunc(tr[-1])
+                    prefix = tr[:-1]
+                    rank = self.predict(prefix, t)
+                    result[idx] = rank.index(self.parser.namespace[ref]) + 1
+                except FloatingPointError:
+                    logging.warn('%s has no similar trails.', (tr[0]['trail_id']))
+                    result[idx] = len(self.parser.namespace)
         return result
 
 
@@ -105,12 +143,12 @@ def cv_folds(fold, table, city):
                             where c.isbot is null and p.city='%s'
                             order by c.uid, c.created_at''' %
                             (table, city))
-    trainset = list()
-    testset = list()
     logging.info('Total Checkins: %d' % (total,))
     rowset = list(cur)
 
     for i in range(fold):
+        trainset = list()
+        testset = list()
         for cnt, row in enumerate(rowset):
             if cnt > float(total) * i / fold and cnt < float(total) * (i + 1) / fold:
                 testset.append(row)
@@ -126,15 +164,15 @@ def experiment():
     """ running the experiment
     """
     cur = conn.cursor(cursorclass=sql.cursors.DictCursor)
-    cur.execute('select distinct id from category')
-    parser = CategoriesX24h([c['id'] for c in cur])
+    cur.execute('select distinct id as id from category')
+    parser = CategoriesX24h([c['id'] for c in cur], 4)
     logging.info('Reading data...')
     for trainset, testset in cv_folds(10, 'checkins_6', sys.argv[1]):
         m = DiscreteTxC(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
         logging.info('Testing...')
-        for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id'])]):
+        for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]):
             print e
 
 

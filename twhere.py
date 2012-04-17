@@ -11,14 +11,16 @@ __author__ = 'SpaceLis'
 
 import logging
 import sys
+import itertools
 
 import MySQLdb as sql
 import numpy as NP
+
 from model.colfilter import MemoryCFModel
-from model.colfilter import JaccardSimilarity_GPU
+#from model.colfilter import JaccardSimilarity_GPU
 from model.colfilter import CosineSimilarity_GPU
 from model.colfilter import LinearCombination
-
+from model.colfilter import cumulated_gaussian
 from trail import TrailGen
 
 conn = sql.connect(user='root',
@@ -33,18 +35,36 @@ class CategoriesX24h(object):
     def __init__(self, categories, div=1, iscumulative=False):
         self.namespace = [i for i in categories]
         self.div = div
+        if iscumulative:
+            self.parse = self.parse_cumulative
+        else:
+            self.parse = self.parse_binary
 
     def size(self):
         return len(self.namespace), 24 / self.div
 
-    def parse_trail(self, trail):
+    def parse_binary(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
         tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
-        #tmp.fill(NP.float32('nan'))
         for c in trail:
-            i, j = self.columnfunc(c)
-            tmp[i, j] = 1
+            poi, t = self.columnfunc(c)
+            tmp[poi, t] = 1
+        if istest:
+            tmp[:, t] = 0  # all checkins at time t will be removed for testing
+            return tmp.flatten(), poi, t
+        return tmp.flatten()
+
+    def parse_cumulative(self, trail, istest=False):
+        """ Parse a trail into a matrix
+        """
+        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
+        for c in trail:
+            poi, t = self.columnfunc(c)
+            tmp[poi, t] = tmp[poi, t] + 1
+        if istest:
+            tmp[:, t] = 0  # all checkins at time t will be removed for testing
+            return tmp.flatten(), poi, t
         return tmp.flatten()
 
     def scale(self, tick):
@@ -54,33 +74,37 @@ class CategoriesX24h(object):
         return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
 
 
-class CategoriesX24cu(object):
+#TODO Test this
+class CategoriesXContinuous(object):
     """ Parsing a sequence of check-ins into a staying matrix with each element
         indicating the number of times of check-ins.
     """
-    def __init__(self, categories, div=1):
+    def __init__(self, categories, div=100):
         self.namespace = [i for i in categories]
         self.div = div
 
     def size(self):
-        return len(self.namespace), 24 / self.div
+        return len(self.namespace), self.div
 
-    def parse_trail(self, trail):
+    def parse(self, trail, istest=False, mu=0.5, ):
         """ Parse a trail into a matrix
         """
-        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
-        #tmp.fill(NP.float32('nan'))
-        for c in trail:
-            i, j = self.columnfunc(c)
-            tmp[i, j] = tmp[i, j] + 1
+        tmp = NP.zeros((len(self.namespace), self.div), dtype=NP.float32)
+        for key, checkins in itertools.groupby(sorted(trail, key=lambda ch: ch['poi']), lambda ck: ck['poi']):
+            tmp[key] = self.gaussian_kernel([t[1] for t in checkins])
         tmp = tmp.flatten()
         return tmp
 
     def scale(self, tick):
-        return str(tick.hour / self.div)
+        return tick.hour * 3600 + tick.minute * 60 + tick.second
 
     def columnfunc(self, checkin):
         return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
+
+    def gaussian_kernel(self, seq):
+        """ Return the cumulative value of Gaussian PDF at each x in seq
+        """
+        return cumulated_gaussian(seq, self.mu, self.sigmasquare, delta=60, interval=(0, 24 * 3600))
 
 
 class DiscreteTxC(object):
@@ -108,9 +132,8 @@ class DiscreteTxC(object):
     def predict(self, trail, time):
         """ predict a trail of stay at `time`
         """
-        ent = self.parser.parse_trail(trail)
-        _ent = self.model.estimate(ent, num=self.simnum)
-        p = _ent.reshape(self.parser.size())[:, time]
+        est = self.model.estimate(trail, num=self.simnum)
+        p = est.reshape(self.parser.size())[:, time]
         return [self.parser.namespace[i] for i in NP.argsort(p)][::-1]
 
     def evaluate(self, trails):
@@ -120,9 +143,8 @@ class DiscreteTxC(object):
         for idx, tr in enumerate(trails):
             with NP.errstate(divide='raise'):
                 try:
-                    ref, t = self.parser.columnfunc(tr[-1])
-                    prefix = tr[:-1]
-                    rank = self.predict(prefix, t)
+                    ftr, ref, t = self.parser.parse(tr, istest=True)
+                    rank = self.predict(ftr, t)
                     result[idx] = rank.index(self.parser.namespace[ref]) + 1
                 except FloatingPointError:
                     logging.warn('%s has no similar trails.', (tr[0]['trail_id']))
@@ -165,7 +187,7 @@ def experiment():
     """
     cur = conn.cursor(cursorclass=sql.cursors.DictCursor)
     cur.execute('select distinct id as id from category')
-    parser = CategoriesX24h([c['id'] for c in cur], 4)
+    parser = CategoriesX24h([c['id'] for c in cur], 1)
     logging.info('Reading data...')
     for trainset, testset in cv_folds(10, 'checkins_6', sys.argv[1]):
         m = DiscreteTxC(parser)

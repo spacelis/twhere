@@ -1,0 +1,13 @@
+#!/bin/bash
+# New York, Chicago, Los Angeles, San Francisco
+retdir=$1
+simtype=$2
+if [ ! -d $retdir ]; then
+	mkdir $retdir
+fi
+for city in "NY 27485069891a7938" "CH 1d9a5370a355ab0c" "LA 3b77caf94bfc81fe" "SF 5a110d312052166f"
+do
+	set -- $city
+	echo Running $1 on similarity ${simtype}
+	./ppython twhere.py $2 >$retdir/$1_${simtype}.result
+done

@@ -8,45 +8,42 @@ History:
 """
 __version__ = '0.1.0'
 __author__ = 'SpaceLis'
-
+import site
+site.addsitedir('../model')
 import logging
 import sys
 import itertools
 
-import MySQLdb as sql
 import numpy as NP
 
 from model.colfilter import MemoryCFModel
-#from model.colfilter import JaccardSimilarity_GPU
-from model.colfilter import CosineSimilarity_GPU
+from model.colfilter import CosineSimilarity
 from model.colfilter import LinearCombination
-from model.colfilter import cumulated_gaussian
+from model.colfilter import convoluted_gaussian
 from trail import TrailGen
-
-conn = sql.connect(user='root',
-        read_default_file='/home/wenli/devel/mysql/my.cnf',
-        db='geotweet')
+from dataprov import MySQLData
+from crossvalid import cv_splites
 
 
 class CategoriesX24h(object):
     """ Parsing a sequence of check-ins into a staying matrix with each element
         indicating whether user stayed at the place at the time.
     """
-    def __init__(self, categories, div=1, iscumulative=False):
+    def __init__(self, categories, unit=1, iscumulative=False):
         self.namespace = [i for i in categories]
-        self.div = div
+        self.unit = unit
         if iscumulative:
             self.parse = self.parse_cumulative
         else:
             self.parse = self.parse_binary
 
     def size(self):
-        return len(self.namespace), 24 / self.div
+        return len(self.namespace), 24 / self.unit
 
     def parse_binary(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
-        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
+        tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
         for c in trail:
             poi, t = self.columnfunc(c)
             tmp[poi, t] = 1
@@ -58,7 +55,7 @@ class CategoriesX24h(object):
     def parse_cumulative(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
-        tmp = NP.zeros((len(self.namespace), 24 / self.div), dtype=NP.float32)
+        tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
         for c in trail:
             poi, t = self.columnfunc(c)
             tmp[poi, t] = tmp[poi, t] + 1
@@ -67,36 +64,53 @@ class CategoriesX24h(object):
             return tmp.flatten(), poi, t
         return tmp.flatten()
 
-    def scale(self, tick):
-        return str(tick.hour / self.div)
+    def discretize(self, tick):
+        return str(tick.hour / self.unit)
 
     def columnfunc(self, checkin):
-        return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
+        return self.namespace.index(checkin['poi']), self.discretize(checkin['tick'])
 
 
-#TODO Test this
 class CategoriesXContinuous(object):
     """ Parsing a sequence of check-ins into a staying matrix with each element
         indicating the number of times of check-ins.
     """
-    def __init__(self, categories, div=100):
+    def __init__(self, categories, div=100, sigmasquare=900. * 900.):
         self.namespace = [i for i in categories]
         self.div = div
+        self.sigmasquare = sigmasquare
 
     def size(self):
         return len(self.namespace), self.div
 
-    def parse(self, trail, istest=False, mu=0.5, ):
+    def parse(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
         tmp = NP.zeros((len(self.namespace), self.div), dtype=NP.float32)
-        for key, checkins in itertools.groupby(sorted(trail, key=lambda ch: ch['poi']), lambda ck: ck['poi']):
-            tmp[key] = self.gaussian_kernel([t[1] for t in checkins])
+        if istest:
+            prefix, lc = trail[:-1], trail[-1]
+            poi, t = self.columnfunc(lc)
+        else:
+            prefix = trail
+        prefix.sort(key=lambda ch: ch['poi'])
+        for key, checkins in itertools.groupby(prefix, lambda ck: ck['poi']):
+            tseq = list()
+            for c in checkins:
+                poi, t = self.columnfunc(c)
+                tseq.append(t)
+            tmp[poi] = self.gaussian_kernel(tseq)
         tmp = tmp.flatten()
+        if istest:
+            return tmp, poi, self.discretize(t)
         return tmp
 
+    def discretize(self, tick):
+        return int(tick / (3600 * 24) * self.div)
+
     def scale(self, tick):
-        return tick.hour * 3600 + tick.minute * 60 + tick.second
+        """
+        """
+        return float(tick.hour * 3600 + tick.minute * 60 + tick.second)
 
     def columnfunc(self, checkin):
         return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
@@ -104,7 +118,7 @@ class CategoriesXContinuous(object):
     def gaussian_kernel(self, seq):
         """ Return the cumulative value of Gaussian PDF at each x in seq
         """
-        return cumulated_gaussian(seq, self.mu, self.sigmasquare, delta=60, interval=(0, 24 * 3600))
+        return convoluted_gaussian(seq, self.sigmasquare, veclen=self.div, interval=(0., 24. * 3600))
 
 
 class DiscreteTxC(object):
@@ -123,10 +137,10 @@ class DiscreteTxC(object):
         """
         data = list()
         for tr in trails:
-            data.append(self.parser.parse_trail(tr))
+            data.append(self.parser.parse(tr))
         self.data = NP.array(data, dtype=NP.float32)
         logging.info('%s values loaded in the model' % (self.data.shape,))
-        self.model = MemoryCFModel(self.data, CosineSimilarity_GPU, LinearCombination)
+        self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination)
         #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
 
     def predict(self, trail, time):
@@ -152,44 +166,17 @@ class DiscreteTxC(object):
         return result
 
 
-def cv_folds(fold, table, city):
-    cur = conn.cursor(cursorclass=sql.cursors.DictCursor)
-    total = cur.execute('''select
-                                c.tr_id as trail_id,
-                                p.category as poi,
-                                c.created_at as tick,
-                                c.text as text
-                            from %s as c
-                                left join checkins_place as p
-                                on c.pid = p.id
-                            where c.isbot is null and p.city='%s'
-                            order by c.uid, c.created_at''' %
-                            (table, city))
-    logging.info('Total Checkins: %d' % (total,))
-    rowset = list(cur)
-
-    for i in range(fold):
-        trainset = list()
-        testset = list()
-        for cnt, row in enumerate(rowset):
-            if cnt > float(total) * i / fold and cnt < float(total) * (i + 1) / fold:
-                testset.append(row)
-            else:
-                trainset.append(row)
-        test_poi = set(c['poi'] for c in testset)
-        shared_poi = set([c['poi'] for c in trainset]) & test_poi
-        logging.info('POIs shared / POIs tested: %d / %d' % (len(shared_poi), len(test_poi)))
-        yield trainset, testset
-
-
 def experiment():
     """ running the experiment
     """
-    cur = conn.cursor(cursorclass=sql.cursors.DictCursor)
-    cur.execute('select distinct id as id from category')
-    parser = CategoriesX24h([c['id'] for c in cur], 1)
-    logging.info('Reading data...')
-    for trainset, testset in cv_folds(10, 'checkins_6', sys.argv[1]):
+    city = sys.argv[1]
+    poicol = 'category'
+    data_provider = MySQLData(city, poicol)
+    logging.info('Reading data from %s', city)
+    data = data_provider.get_data()
+    logging.info('Predicting %s', poicol)
+    parser = CategoriesXContinuous(data_provider.get_namespace(), div=100)
+    for trainset, testset in cv_splites(data, len(data)):
         m = DiscreteTxC(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
@@ -222,7 +209,8 @@ def test_model():
 
     testset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in test]
 
-    parser = CategoriesX24h(['ewi', 'home', 'canteen'])
+    parser = CategoriesXContinuous(['ewi', 'home', 'canteen'])
+    #parser = CategoriesX24h(['ewi', 'home', 'canteen'])
     m = DiscreteTxC(parser)
     logging.info('Training...')
     m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])

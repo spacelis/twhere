@@ -21,7 +21,7 @@ from model.colfilter import CosineSimilarity
 from model.colfilter import LinearCombination
 from model.colfilter import convoluted_gaussian
 from trail import TrailGen
-from dataprov import MySQLData
+from dataprov import TextData
 from crossvalid import cv_splites
 
 
@@ -171,7 +171,7 @@ def experiment():
     """
     city = sys.argv[1]
     poicol = 'category'
-    data_provider = MySQLData(city, poicol)
+    data_provider = TextData(city, poicol)
     logging.info('Reading data from %s', city)
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)

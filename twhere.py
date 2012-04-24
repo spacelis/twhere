@@ -75,10 +75,10 @@ class CategoriesXContinuous(object):
     """ Parsing a sequence of check-ins into a staying matrix with each element
         indicating the number of times of check-ins.
     """
-    def __init__(self, categories, div=100, sigmasquare=900. * 900.):
+    def __init__(self, categories, div=100, sigma=1800.):
         self.namespace = [i for i in categories]
         self.div = div
-        self.sigmasquare = sigmasquare
+        self.sigmasquare = float(sigma * sigma)
 
     def size(self):
         return len(self.namespace), self.div
@@ -121,6 +121,30 @@ class CategoriesXContinuous(object):
         return convoluted_gaussian(seq, self.sigmasquare, veclen=self.div, interval=(0., 24. * 3600))
 
 
+class Baseline(object):
+    """ Always predicting the last
+    """
+    def __init__(self, parser):
+        super(Baseline, self).__init__()
+        self.parser = parser
+
+    def train(self, trails):
+        pass
+
+    def evaluate(self, trails):
+        """ predicting the last
+        """
+        from random import shuffle
+        result = NP.zeros(len(trails), dtype=NP.int32)
+        for idx, tr in enumerate(trails):
+            rank = list(self.parser.namespace)
+            shuffle(rank)
+            pos = rank.index(tr[-2]['poi'])
+            rank[0], rank[pos] = rank[pos], rank[0]
+            result[idx] = rank.index(tr[-1]['poi']) + 1
+        return result
+
+
 class DiscreteTxC(object):
     """ A trail is treated as a set of (Place, Time) items representing a staying at a place
         and the time dimension is discrete as hours.
@@ -139,7 +163,7 @@ class DiscreteTxC(object):
         for tr in trails:
             data.append(self.parser.parse(tr))
         self.data = NP.array(data, dtype=NP.float32)
-        logging.info('%s values loaded in the model' % (self.data.shape,))
+        logging.info('%s values loaded in the model', self.data.shape)
         self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination)
         #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
 
@@ -161,8 +185,9 @@ class DiscreteTxC(object):
                     rank = self.predict(ftr, t)
                     result[idx] = rank.index(self.parser.namespace[ref]) + 1
                 except FloatingPointError:
-                    logging.warn('%s has no similar trails.', (tr[0]['trail_id']))
+                    logging.warn('%s has no similar trails.', tr[0]['trail_id'])
                     result[idx] = len(self.parser.namespace)
+        logging.info('%s trails are tested', len(result))
         return result
 
 
@@ -175,9 +200,10 @@ def experiment():
     logging.info('Reading data from %s', city)
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)
-    parser = CategoriesXContinuous(data_provider.get_namespace(), div=100)
+    parser = CategoriesXContinuous(data_provider.get_namespace(), div=200, sigma=900)
     for trainset, testset in cv_splites(data, len(data)):
         m = DiscreteTxC(parser)
+        #m = Baseline(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
         logging.info('Testing...')

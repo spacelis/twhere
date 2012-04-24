@@ -175,7 +175,8 @@ def experiment():
     logging.info('Reading data from %s', city)
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)
-    parser = CategoriesXContinuous(data_provider.get_namespace(), div=100)
+    # Parser parameters @parser
+    parser = CategoriesXContinuous(data_provider.get_namespace(), div=400, sigmasquare=600.*600.)
     for trainset, testset in cv_splites(data, len(data)):
         m = DiscreteTxC(parser)
         logging.info('Training...')

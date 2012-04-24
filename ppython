@@ -1,2 +1,2 @@
 #!/bin/bash
-env PYTHONPATH=$PYTHONPATH:~/project/workbench/model python $*
+env PYTHONPATH=$PYTHONPATH:~/workbench/model:~/workbench/collective python $*

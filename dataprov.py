@@ -11,7 +11,6 @@ Description:
 __version__ = '0.0.1'
 
 
-import MySQLdb as sql
 import logging
 from datetime import datetime
 
@@ -21,6 +20,7 @@ class MySQLData(object):
     """
     def __init__(self, city, poicol):
         super(MySQLData, self).__init__()
+        import MySQLdb as sql
         logging.info('Using MySQL data provider')
         self.city, self.poicol = city, poicol
         if self.poicol == 'base':

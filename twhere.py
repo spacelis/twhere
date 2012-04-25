@@ -167,6 +167,7 @@ class DiscreteTxC(object):
         logging.info('%s values loaded in the model', self.data.shape)
         self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination, **self.subkargs)
         #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
+        logging.info('%s values loaded in the model', self.data.shape)
 
     def predict(self, trail, time):
         """ predict a trail of stay at `time`
@@ -196,15 +197,17 @@ def experiment():
     """ running the experiment
     """
     city = sys.argv[1]
+    simnum = int(sys.argv[2])
+    sigma = float(sys.argv[3])
     poicol = 'category'
     data_provider = TextData(city, poicol)
     logging.info('Reading data from %s', city)
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)
     # Parser parameters @parser
-    parser = CategoriesXContinuous(data_provider.get_namespace(), div=200, sigma=900.)
+    parser = CategoriesXContinuous(data_provider.get_namespace(), div=100, sigma=sigma)
     for trainset, testset in cv_splites(data, len(data)):
-        m = DiscreteTxC(parser)
+        m = DiscreteTxC(parser, simnum=simnum)
         #m = Baseline(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])

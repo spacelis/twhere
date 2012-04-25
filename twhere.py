@@ -149,12 +149,13 @@ class DiscreteTxC(object):
     """ A trail is treated as a set of (Place, Time) items representing a staying at a place
         and the time dimension is discrete as hours.
     """
-    def __init__(self, parser, simnum=50):
+    def __init__(self, parser, simnum=50, **kargs):
         super(DiscreteTxC, self).__init__()
         self.parser = parser
         self.data = None
         self.model = None
         self.simnum = simnum
+        self.subkargs = kargs
 
     def train(self, trails):
         """ Parse trails in to arrays so that they can be used in CF
@@ -164,7 +165,7 @@ class DiscreteTxC(object):
             data.append(self.parser.parse(tr))
         self.data = NP.array(data, dtype=NP.float32)
         logging.info('%s values loaded in the model', self.data.shape)
-        self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination)
+        self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination, **self.subkargs)
         #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
 
     def predict(self, trail, time):

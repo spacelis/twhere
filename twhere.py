@@ -33,42 +33,46 @@ class CategoriesX24h(object):
         self.namespace = [i for i in categories]
         self.unit = unit
         if iscumulative:
-            self.parse = self.parse_cumulative
+            self.vectorize = self.vectorize_cumulative
         else:
-            self.parse = self.parse_binary
+            self.vectorize = self.vectorize_binary
 
     def size(self):
         return len(self.namespace), 24 / self.unit
 
-    def parse_binary(self, trail, istest=False):
+    def vectorize_binary(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
         tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
         for c in trail:
-            poi, t = self.columnfunc(c)
-            tmp[poi, t] = 1
+            poi, t = self.parse_checkin(c)
+            tmp[poi, self.discretize(t)] = 1
         if istest:
-            tmp[:, t] = 0  # all checkins at time t will be removed for testing
-            return tmp.flatten(), poi, t
-        return tmp.flatten()
+            tmp[:, self.discretize(t)] = 0  # all checkins at time t will be removed for testing
+            return tmp, poi, t
+        return tmp
 
-    def parse_cumulative(self, trail, istest=False):
+    def vectorize_cumulative(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
         tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
         for c in trail:
-            poi, t = self.columnfunc(c)
-            tmp[poi, t] = tmp[poi, t] + 1
+            poi, t = self.parse_checkin(c)
+            dist = self.discretize(t)
+            tmp[poi, dist] = tmp[poi, dist] + 1
         if istest:
-            tmp[:, t] = 0  # all checkins at time t will be removed for testing
-            return tmp.flatten(), poi, t
-        return tmp.flatten()
+            tmp[:, dist] = 0  # all checkins at time t will be removed for testing
+            return tmp, poi, t
+        return tmp
 
     def discretize(self, tick):
-        return str(tick.hour / self.unit)
+        return tick / self.unit
 
-    def columnfunc(self, checkin):
-        return self.namespace.index(checkin['poi']), self.discretize(checkin['tick'])
+    def normalize(self, dt_obj):
+        return dt_obj.hour
+
+    def parse_checkin(self, checkin):
+        return self.namespace.index(checkin['poi']), self.normalize(checkin['tick'])
 
 
 class CategoriesXContinuous(object):
@@ -83,37 +87,41 @@ class CategoriesXContinuous(object):
     def size(self):
         return len(self.namespace), self.div
 
-    def parse(self, trail, istest=False):
+    def vectorize(self, trail, istest=False):
         """ Parse a trail into a matrix
         """
         tmp = NP.zeros((len(self.namespace), self.div), dtype=NP.float32)
         if istest:
             prefix, lc = trail[:-1], trail[-1]
-            poi, t = self.columnfunc(lc)
+            poi, t = self.parse_checkin(lc)
         else:
             prefix = trail
         prefix.sort(key=lambda ch: ch['poi'])
         for key, checkins in itertools.groupby(prefix, lambda ck: ck['poi']):
             tseq = list()
             for c in checkins:
-                poi, t = self.columnfunc(c)
+                poi, t = self.parse_checkin(c)
                 tseq.append(t)
             tmp[poi] = self.gaussian_kernel(tseq)
-        tmp = tmp.flatten()
+        tmp = tmp
         if istest:
-            return tmp, poi, self.discretize(t)
+            return tmp, poi, t
         return tmp
 
     def discretize(self, tick):
+        """ Discretization time in to segments for vectorizing
+        """
         return int(tick / (3600 * 24) * self.div)
 
-    def scale(self, tick):
-        """
+    def normalize(self, tick):
+        """ Converting to seconds
         """
         return float(tick.hour * 3600 + tick.minute * 60 + tick.second)
 
-    def columnfunc(self, checkin):
-        return self.namespace.index(checkin['poi']), self.scale(checkin['tick'])
+    def parse_checkin(self, checkin):
+        """ Extract and convert related information in a check-in into internal types
+        """
+        return self.namespace.index(checkin['poi']), self.normalize(checkin['tick'])
 
     def gaussian_kernel(self, seq):
         """ Return the cumulative value of Gaussian PDF at each x in seq
@@ -149,9 +157,11 @@ class DiscreteTxC(object):
     """ A trail is treated as a set of (Place, Time) items representing a staying at a place
         and the time dimension is discrete as hours.
     """
-    def __init__(self, parser, simnum=50, **kargs):
+    def __init__(self, parser, simfunc, conbfunc, simnum=50):
         super(DiscreteTxC, self).__init__()
         self.parser = parser
+        self.simfunc = simfunc
+        self.combfunc = combfunc
         self.data = None
         self.model = None
         self.simnum = simnum
@@ -162,18 +172,17 @@ class DiscreteTxC(object):
         """
         data = list()
         for tr in trails:
-            data.append(self.parser.parse(tr))
+            data.append(self.parser.vectorize(tr))
         self.data = NP.array(data, dtype=NP.float32)
         logging.info('%s values loaded in the model', self.data.shape)
-        self.model = MemoryCFModel(self.data, CosineSimilarity, LinearCombination, **self.subkargs)
-        #self.model = MemoryCFModel(self.data, JaccardSimilarity_GPU, LinearCombination)
+        self.model = MemoryCFModel(self.data, self.simfunc, combfunc)
         logging.info('%s values loaded in the model', self.data.shape)
 
-    def predict(self, trail, time):
-        """ predict a trail of stay at `time`
+    def predict(self, trail, tick):
+        """ predict a trail of stay at `tick`
         """
-        est = self.model.estimate(trail, num=self.simnum)
-        p = est.reshape(self.parser.size())[:, time]
+        est = self.model.estimate(trail, num=self.simnum, tick=tick)
+        p = est[:, self.parser.discretize(tick)]
         return [self.parser.namespace[i] for i in NP.argsort(p)][::-1]
 
     def evaluate(self, trails):
@@ -183,7 +192,7 @@ class DiscreteTxC(object):
         for idx, tr in enumerate(trails):
             with NP.errstate(divide='raise'):
                 try:
-                    ftr, ref, t = self.parser.parse(tr, istest=True)
+                    ftr, ref, t = self.parser.vectorize(tr, istest=True)
                     rank = self.predict(ftr, t)
                     result[idx] = rank.index(self.parser.namespace[ref]) + 1
                 except FloatingPointError:
@@ -196,16 +205,19 @@ class DiscreteTxC(object):
 def experiment():
     """ running the experiment
     """
+    # Parameters
     city = sys.argv[1]
     simnum = int(sys.argv[2])
     sigma = float(sys.argv[3])
     poicol = 'category'
     data_provider = TextData(city, poicol)
+    veclen = 100
+
+    # Experiment
     logging.info('Reading data from %s', city)
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)
-    # Parser parameters @parser
-    parser = CategoriesXContinuous(data_provider.get_namespace(), div=100, sigma=sigma)
+    parser = CategoriesXContinuous(data_provider.get_namespace(), div=veclen, sigma=sigma)
     for trainset, testset in cv_splites(data, len(data)):
         m = DiscreteTxC(parser, simnum=simnum)
         #m = Baseline(parser)

@@ -10,14 +10,19 @@ __version__ = '0.1.0'
 __author__ = 'SpaceLis'
 import site
 site.addsitedir('../model')
+import resource
+resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024L, -1L))
+
 import logging
 import sys
 import itertools
 
 import numpy as NP
+NP.seterr(all='warn')
 
 from model.colfilter import MemoryCFModel
 from model.colfilter import CosineSimilarity
+from model.colfilter import CosineSimilarityDamping
 from model.colfilter import LinearCombination
 from model.colfilter import convoluted_gaussian
 from trail import TrailGen
@@ -157,7 +162,7 @@ class DiscreteTxC(object):
     """ A trail is treated as a set of (Place, Time) items representing a staying at a place
         and the time dimension is discrete as hours.
     """
-    def __init__(self, parser, simfunc, conbfunc, simnum=50):
+    def __init__(self, parser, simfunc, combfunc, simnum=50, **kargs):
         super(DiscreteTxC, self).__init__()
         self.parser = parser
         self.simfunc = simfunc
@@ -174,9 +179,8 @@ class DiscreteTxC(object):
         for tr in trails:
             data.append(self.parser.vectorize(tr))
         self.data = NP.array(data, dtype=NP.float32)
-        logging.info('%s values loaded in the model', self.data.shape)
-        self.model = MemoryCFModel(self.data, self.simfunc, combfunc)
-        logging.info('%s values loaded in the model', self.data.shape)
+        logging.info('%s values loaded from data source', self.data.shape)
+        self.model = MemoryCFModel(self.data, self.simfunc, self.combfunc)
 
     def predict(self, trail, tick):
         """ predict a trail of stay at `tick`
@@ -219,7 +223,8 @@ def experiment():
     logging.info('Predicting %s', poicol)
     parser = CategoriesXContinuous(data_provider.get_namespace(), div=veclen, sigma=sigma)
     for trainset, testset in cv_splites(data, len(data)):
-        m = DiscreteTxC(parser, simnum=simnum)
+        #m = DiscreteTxC(parser, CosineSimilarity(), LinearCombination(), simnum=simnum)
+        m = DiscreteTxC(parser, CosineSimilarityDamping(factor=10000000.), LinearCombination(), simnum=simnum)
         #m = Baseline(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])

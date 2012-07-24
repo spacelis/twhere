@@ -224,7 +224,7 @@ def experiment():
     parser = CategoriesXContinuous(data_provider.get_namespace(), div=veclen, sigma=sigma)
     for trainset, testset in cv_splites(data, len(data)):
         #m = DiscreteTxC(parser, CosineSimilarity(), LinearCombination(), simnum=simnum)
-        m = DiscreteTxC(parser, CosineSimilarityDamping(factor=10000000.), LinearCombination(), simnum=simnum)
+        m = DiscreteTxC(parser, CosineSimilarityDamping(factor=float(sys.argv[4])), LinearCombination(), simnum=simnum)
         #m = Baseline(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])

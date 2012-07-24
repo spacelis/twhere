@@ -11,7 +11,7 @@ __author__ = 'SpaceLis'
 import site
 site.addsitedir('../model')
 import resource
-resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024L, -1L))
+resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
 
 import logging
 import sys

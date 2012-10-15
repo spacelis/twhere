@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """File: trailprediction.py
 Description:
@@ -8,26 +8,33 @@ History:
 """
 __version__ = '0.1.0'
 __author__ = 'SpaceLis'
+
+import sys
 import site
 site.addsitedir('../model')
-import resource
-resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
+try:
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
+except:
+    print >>sys.stderr, '[WARN] Failed set resource limits'
 
 import logging
 import sys
 import itertools
 
 import numpy as NP
-NP.seterr(all='warn')
+NP.seterr(all='warn', under='ignore')
 
 from model.colfilter import MemoryCFModel
 from model.colfilter import CosineSimilarity
 from model.colfilter import CosineSimilarityDamping
+from model.colfilter import CosineSimilarityUpbound
 from model.colfilter import LinearCombination
 from model.colfilter import convoluted_gaussian
+from model.colfilter import convoluted_gaussian_max
 from trail import TrailGen
 from dataprov import TextData
-from crossvalid import cv_splites
+from experiment.folds import crossvalid_iter
 
 
 class CategoriesX24h(object):
@@ -131,7 +138,7 @@ class CategoriesXContinuous(object):
     def gaussian_kernel(self, seq):
         """ Return the cumulative value of Gaussian PDF at each x in seq
         """
-        return convoluted_gaussian(seq, self.sigmasquare, veclen=self.div, interval=(0., 24. * 3600))
+        return convoluted_gaussian_max(seq, self.sigmasquare, veclen=self.div, interval=(0., 24. * 3600))
 
 
 class Baseline(object):
@@ -222,9 +229,10 @@ def experiment():
     data = data_provider.get_data()
     logging.info('Predicting %s', poicol)
     parser = CategoriesXContinuous(data_provider.get_namespace(), div=veclen, sigma=sigma)
-    for trainset, testset in cv_splites(data, len(data)):
-        #m = DiscreteTxC(parser, CosineSimilarity(), LinearCombination(), simnum=simnum)
-        m = DiscreteTxC(parser, CosineSimilarityDamping(factor=float(sys.argv[4])), LinearCombination(), simnum=simnum)
+    for trainset, testset in crossvalid_iter(data, 10):
+        m = DiscreteTxC(parser, CosineSimilarity(), LinearCombination(), simnum=simnum)
+        #m = DiscreteTxC(parser, CosineSimilarityDamping(factor=float(sys.argv[4])), LinearCombination(), simnum=simnum)
+        #m = DiscreteTxC(parser, CosineSimilarityUpbound(), LinearCombination(), simnum=simnum)
         #m = Baseline(parser)
         logging.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])

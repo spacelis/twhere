@@ -13,9 +13,11 @@ import math
 from datetime import datetime
 import itertools
 from model.colfilter import kernel_smooth
+from model.colfilter import KERNELS
 
 
 TRAILSECONDS = 24 * 3600
+EPSILON = 1e-20
 
 
 def TrailGen(seq, key=lambda x: x, diff=None):
@@ -80,6 +82,10 @@ class TimeParser(object):
         elif t[-1] == 'h':
             return int(t[:-1]) * 3600
 
+
+# -------------------------------------------------
+# Vetorizors
+#
 class Vectorizor(object):
     """ Make trail into vectors
     """
@@ -89,7 +95,10 @@ class Vectorizor(object):
         self.unit = float(TRAILSECONDS) / veclen
         self.timeparser = timeparser
 
-    def process(trail):
+    def process(self, trail):
+        raise NotImplemented
+
+    def get_timeslot(self, t):
         raise NotImplemented
 
 
@@ -112,7 +121,6 @@ class BinaryVectorizor(Vectorizor):
             poi_id = self.namespace.index(c['poi'])
             tickslot = math.trunc(self.timeparser.parse(c['tick']) / self.unit)
             vec[poi_id, tickslot] = 1
-
         return vec
 
     def process_accum(self, trail):
@@ -129,11 +137,11 @@ class BinaryVectorizor(Vectorizor):
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, veclen, sigma=3600, timeparser=TimeParser(), bounded=False, isaccum=False, kernel='gaussian'):
+    def __init__(self, namespace, veclen, interval=(0., 24 * 3600.), kernel='gaussian', params=(3600,), timeparser=TimeParser(), isaccum=False):
         super(KernelVectorizor, self).__init__(namespace, veclen, timeparser)
-        self.bounded = bounded
         self.kernel = kernel
-        self.sigma = sigma
+        self.params = params
+        self.axis = NP.linspace(*interval, num=veclen, endpoint=False)
         if isaccum:
             self.aggr = NP.add
         else:
@@ -145,14 +153,19 @@ class KernelVectorizor(Vectorizor):
         vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
         for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
             idx = self.namespace.index(poi)
-            vec[idx][:] = kernel_smooth([self.timeparser.parse(c['tick']) for c in checkins], self.sigma, self.veclen, aggr=self.aggr, kernel=self.kernel)
-        vec[vec == 0] = 1.
+            vec[idx][:] = kernel_smooth(self.axis, [self.timeparser.parse(c['tick']) for c in checkins], self.params, aggr=self.aggr, kernel=KERNELS[self.kernel])
+        NP.add(vec, EPSILON, vec)
         unity = NP.sum(vec, axis=0)
         NP.divide(vec, unity, vec)
         return vec
 
+    def get_timeslot(self, t):
+        """ Return the timeslot
+        """
+        return self.axis.searchsorted(self.timeparser.parse(t)) - 1
 
-# --------------------
+
+# -------------------------------------------------
 # TESTS
 #
 def testTrailGen():
@@ -181,6 +194,8 @@ def testKernelVectorizor():
     """
     """
     from datetime import datetime
+    from matplotlib import pyplot as PLT
+    from numpy.testing import assert_equal
     kvz = KernelVectorizor(['a', 'b', 'c'], 24)
     data = [
         "a 2010-12-13 04:07:12",
@@ -188,7 +203,12 @@ def testKernelVectorizor():
         "c 2010-12-13 06:09:51",
     ]
     tr = [{"poi": x, "tick": datetime.strptime(y, '%Y-%m-%d %H:%M:%S')} for x, y in [s.split(' ', 1) for s in data]]
-    print kvz.process(tr)
+    v = kvz.process(tr)
+    PLT.plot(range(24), v[0])
+    PLT.plot(range(24), v[1])
+    PLT.plot(range(24), v[2])
+    PLT.show()
+    assert_equal(kvz.get_timeslot(datetime.strptime('2010-12-13 23:17:23', '%Y-%m-%d %H:%M:%S')), 23)
 
 
 if __name__ == '__main__':

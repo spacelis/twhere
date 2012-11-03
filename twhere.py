@@ -10,143 +10,70 @@ __version__ = '0.1.0'
 __author__ = 'SpaceLis'
 
 import sys
+import logging
+logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
+
 import site
 site.addsitedir('../model')
+
 try:
     import resource
     resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
 except:
-    print >>sys.stderr, '[WARN] Failed set resource limits'
+    LOGGER.warn('Failed set resource limits.')
 
-import logging
-import sys
-import itertools
 
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
-from model.colfilter import MemoryCFModel
-from model.colfilter import CosineSimilarity
-from model.colfilter import CosineSimilarityDamping
-from model.colfilter import CosineSimilarityUpbound
-from model.colfilter import LinearCombination
-from model.colfilter import convoluted_gaussian
-from model.colfilter import convoluted_gaussian_max
+from model.colfilter import VectorDatabase
 from trail import TrailGen
+from trail import KernelVectorizor
+from trail import TimeParser
 from dataprov import TextData
-from experiment.folds import crossvalid_iter
+from experiment.crossvalid import folds
+from model.colfilter import CosineSimilarity
+from model.colfilter import LinearCombination
 
 
-class CategoriesX24h(object):
-    """ Parsing a sequence of check-ins into a staying matrix with each element
-        indicating whether user stayed at the place at the time.
+class PredictingMajority(object):
+    """ Preducting the majority class
     """
-    def __init__(self, categories, unit=1, iscumulative=False):
-        self.namespace = [i for i in categories]
-        self.unit = unit
-        if iscumulative:
-            self.vectorize = self.vectorize_cumulative
-        else:
-            self.vectorize = self.vectorize_binary
+    def __init__(self, namespace):
+        super(PredictingMajority, self).__init__()
+        self.namespace = namespace
+        self.dist = dict([(n, 0) for n in namespace])
 
-    def size(self):
-        return len(self.namespace), 24 / self.unit
-
-    def vectorize_binary(self, trail, istest=False):
-        """ Parse a trail into a matrix
+    def train(self, trails):
+        """ Calculate the distribution of visiting location type
         """
-        tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
-        for c in trail:
-            poi, t = self.parse_checkin(c)
-            tmp[poi, self.discretize(t)] = 1
-        if istest:
-            tmp[:, self.discretize(t)] = 0  # all checkins at time t will be removed for testing
-            return tmp, poi, t
-        return tmp
+        for tr in trails:
+            for c in tr:
+                self.dist[c['poi']] += 1
 
-    def vectorize_cumulative(self, trail, istest=False):
-        """ Parse a trail into a matrix
+        self.majority = sorted(self.dist.iteritems, key=lambda x: x[1], reverse=True)[0][0]
+
+    def evaluate(self, trails):
+        """ predicting the last
         """
-        tmp = NP.zeros((len(self.namespace), 24 / self.unit), dtype=NP.float32)
-        for c in trail:
-            poi, t = self.parse_checkin(c)
-            dist = self.discretize(t)
-            tmp[poi, dist] = tmp[poi, dist] + 1
-        if istest:
-            tmp[:, dist] = 0  # all checkins at time t will be removed for testing
-            return tmp, poi, t
-        return tmp
-
-    def discretize(self, tick):
-        return tick / self.unit
-
-    def normalize(self, dt_obj):
-        return dt_obj.hour
-
-    def parse_checkin(self, checkin):
-        return self.namespace.index(checkin['poi']), self.normalize(checkin['tick'])
+        from random import shuffle
+        result = NP.zeros(len(trails), dtype=NP.int32)
+        for idx, tr in enumerate(trails):
+            rank = list(self.namespace)
+            shuffle(rank)
+            pos = rank.index(self.majority)
+            rank[0], rank[pos] = rank[pos], rank[0]
+            result[idx] = rank.index(tr[-1]['poi']) + 1
+        return result
 
 
-class CategoriesXContinuous(object):
-    """ Parsing a sequence of check-ins into a staying matrix with each element
-        indicating the number of times of check-ins.
-    """
-    def __init__(self, categories, div=100, sigma=1800.):
-        self.namespace = [i for i in categories]
-        self.div = div
-        self.sigmasquare = float(sigma * sigma)
-
-    def size(self):
-        return len(self.namespace), self.div
-
-    def vectorize(self, trail, istest=False):
-        """ Parse a trail into a matrix
-        """
-        tmp = NP.zeros((len(self.namespace), self.div), dtype=NP.float32)
-        if istest:
-            prefix, lc = trail[:-1], trail[-1]
-            poi, t = self.parse_checkin(lc)
-        else:
-            prefix = trail
-        prefix.sort(key=lambda ch: ch['poi'])
-        for key, checkins in itertools.groupby(prefix, lambda ck: ck['poi']):
-            tseq = list()
-            for c in checkins:
-                poi, t = self.parse_checkin(c)
-                tseq.append(t)
-            tmp[poi] = self.gaussian_kernel(tseq)
-        tmp = tmp
-        if istest:
-            return tmp, poi, t
-        return tmp
-
-    def discretize(self, tick):
-        """ Discretization time in to segments for vectorizing
-        """
-        return int(tick / (3600 * 24) * self.div)
-
-    def normalize(self, tick):
-        """ Converting to seconds
-        """
-        return float(tick.hour * 3600 + tick.minute * 60 + tick.second)
-
-    def parse_checkin(self, checkin):
-        """ Extract and convert related information in a check-in into internal types
-        """
-        return self.namespace.index(checkin['poi']), self.normalize(checkin['tick'])
-
-    def gaussian_kernel(self, seq):
-        """ Return the cumulative value of Gaussian PDF at each x in seq
-        """
-        return convoluted_gaussian_max(seq, self.sigmasquare, veclen=self.div, interval=(0., 24. * 3600))
-
-
-class Baseline(object):
+class PredictingLast(object):
     """ Always predicting the last
     """
-    def __init__(self, parser):
-        super(Baseline, self).__init__()
-        self.parser = parser
+    def __init__(self, namespace):
+        super(PredictingLast, self).__init__()
+        self.namespace = namespace
 
     def train(self, trails):
         pass
@@ -157,7 +84,7 @@ class Baseline(object):
         from random import shuffle
         result = NP.zeros(len(trails), dtype=NP.int32)
         for idx, tr in enumerate(trails):
-            rank = list(self.parser.namespace)
+            rank = list(self.namespace)
             shuffle(rank)
             pos = rank.index(tr[-2]['poi'])
             rank[0], rank[pos] = rank[pos], rank[0]
@@ -165,51 +92,59 @@ class Baseline(object):
         return result
 
 
-class DiscreteTxC(object):
-    """ A trail is treated as a set of (Place, Time) items representing a staying at a place
-        and the time dimension is discrete as hours.
+class ColfilterModel(object):
+    """ Using cofilter with vectorized trails
     """
-    def __init__(self, parser, simfunc, combfunc, simnum=50, **kargs):
-        super(DiscreteTxC, self).__init__()
-        self.parser = parser
-        self.simfunc = simfunc
-        self.combfunc = combfunc
-        self.data = None
-        self.model = None
-        self.simnum = simnum
-        self.subkargs = kargs
+    def __init__(self, namespace, veclen, vdbstr, kernel):
+        """ Constructor
+
+            Arguments:
+                namespace -- the predicting classes
+                veclen -- the length of vectors
+                vdbstr -- a string for configuring VectorDatabase, e.g., '20|CosineSimilarity()|LinearCombination()'
+                kernel -- a string representing kernel used, e.g. 'gaussian|(3600,)'
+        """
+        super(ColfilterModel, self).__init__()
+        self.namespace = namespace
+        self.veclen = veclen
+        self.timeparser = TimeParser()
+        # Prepare model with kernel specification
+        kparams = list()
+        for s in kernel.split('|'):
+            try:
+                kparams.append(eval(s))
+            except NameError:
+                kparams.append(s)
+        self.vectorizor = KernelVectorizor(namespace, veclen, *kparams)
+        vparams = list()
+        for s in vdbstr.split('|'):
+            try:
+                vparams.append(eval(s))
+            except NameError:
+                vparams.append(s)
+        self.model = VectorDatabase(*vparams)
+        LOGGER.info('KENEL: ' + str(kparams))
+        LOGGER.info('VectorDB: ' + str(vparams))
 
     def train(self, trails):
-        """ Parse trails in to arrays so that they can be used in CF
+        """ Train the model
         """
-        data = list()
-        for tr in trails:
-            data.append(self.parser.vectorize(tr))
-        self.data = NP.array(data, dtype=NP.float32)
-        logging.info('%s values loaded from data source', self.data.shape)
-        self.model = MemoryCFModel(self.data, self.simfunc, self.combfunc)
-
-    def predict(self, trail, tick):
-        """ predict a trail of stay at `tick`
-        """
-        est = self.model.estimate(trail, num=self.simnum, tick=tick)
-        p = est[:, self.parser.discretize(tick)]
-        return [self.parser.namespace[i] for i in NP.argsort(p)][::-1]
+        self.vecs = NP.zeros((len(trails), len(self.namespace), self.veclen), dtype=NP.float32)
+        for idx, tr in enumerate(trails):
+            self.vecs[idx, :, :] = self.vectorizor.process(tr)
+        self.model.load_data(self.vecs)
 
     def evaluate(self, trails):
-        """ evaluate the model using a set of `trails`
+        """ Predicting with colfilter model
         """
         result = NP.zeros(len(trails), dtype=NP.int32)
         for idx, tr in enumerate(trails):
-            with NP.errstate(divide='raise'):
-                try:
-                    ftr, ref, t = self.parser.vectorize(tr, istest=True)
-                    rank = self.predict(ftr, t)
-                    result[idx] = rank.index(self.parser.namespace[ref]) + 1
-                except FloatingPointError:
-                    logging.warn('%s has no similar trails.', tr[0]['trail_id'])
-                    result[idx] = len(self.parser.namespace)
-        logging.info('%s trails are tested', len(result))
+            history = tr[:-1]
+            refpoi, t = tr[-1]['poi'], self.vectorizor.get_timeslot(tr[-1]['tick'])
+            vec = self.vectorizor.process(history)
+            est = self.model.estimates(vec, t)
+            rank = list(reversed(NP.argsort(est[:, t])))
+            result[idx] = rank.index(self.namespace.index(refpoi)) + 1      # rank should start from 1 because to MRR
         return result
 
 
@@ -218,25 +153,19 @@ def experiment():
     """
     # Parameters
     city = sys.argv[1]
-    simnum = int(sys.argv[2])
-    sigma = float(sys.argv[3])
     poicol = 'category'
     data_provider = TextData(city, poicol)
     veclen = 100
 
     # Experiment
-    logging.info('Reading data from %s', city)
+    LOGGER.info('Reading data from %s', city)
     data = data_provider.get_data()
-    logging.info('Predicting %s', poicol)
-    parser = CategoriesXContinuous(data_provider.get_namespace(), div=veclen, sigma=sigma)
-    for trainset, testset in crossvalid_iter(data, 10):
-        m = DiscreteTxC(parser, CosineSimilarity(), LinearCombination(), simnum=simnum)
-        #m = DiscreteTxC(parser, CosineSimilarityDamping(factor=float(sys.argv[4])), LinearCombination(), simnum=simnum)
-        #m = DiscreteTxC(parser, CosineSimilarityUpbound(), LinearCombination(), simnum=simnum)
-        #m = Baseline(parser)
-        logging.info('Training...')
+    LOGGER.info('Predicting %s', poicol)
+    for trainset, testset in folds(data, 10):
+        m = ColfilterModel(data_provider.get_namespace(), veclen, '20|CosineSimilarity()|LinearCombination()', '(0.,24*3600.)|gaussian|(3600.,)')
+        LOGGER.info('Training...')
         m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
-        logging.info('Testing...')
+        LOGGER.info('Testing...')
         for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]):
             print e
 
@@ -245,6 +174,7 @@ def test_model():
     """ Test the model
     """
     from datetime import datetime
+    from numpy.testing import assert_equal
     column = ['trail_id', 'poi', 'tick', 'text']
     train = [['1', 'home', datetime(2011, 1, 1, 6, 30), 'test'],
             ['1', 'ewi', datetime(2011, 1, 1, 9, 30), 'test'],
@@ -265,22 +195,15 @@ def test_model():
 
     testset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in test]
 
-    parser = CategoriesXContinuous(['ewi', 'home', 'canteen'])
-    #parser = CategoriesX24h(['ewi', 'home', 'canteen'])
-    m = DiscreteTxC(parser)
-    logging.info('Training...')
+    m = ColfilterModel(['home', 'ewi', 'canteen'], 24, '20|CosineSimilarity()|LinearCombination()', '(0., 24*3600.)|gaussian|(3600.,)')
+    LOGGER.info('Training...')
     m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
-    logging.info('Testing...')
+    LOGGER.info('Testing...')
     for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id'])]):
         print e
+        assert_equal(e, 1)
 
-
-def test():
-    """ Test
-    """
-    #test_model()
-    experiment()
 
 if __name__ == '__main__':
-    logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)
-    test()
+    #experiment()
+    test_model()

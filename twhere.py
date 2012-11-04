@@ -134,17 +134,15 @@ class ColfilterModel(object):
             self.vecs[idx, :, :] = self.vectorizor.process(tr)
         self.model.load_data(self.vecs)
 
-    def evaluate(self, trails):
+    def evaluate(self, tr):
         """ Predicting with colfilter model
         """
-        result = NP.zeros(len(trails), dtype=NP.int32)
-        for idx, tr in enumerate(trails):
-            history = tr[:-1]
-            refpoi, t = tr[-1]['poi'], self.vectorizor.get_timeslot(tr[-1]['tick'])
-            vec = self.vectorizor.process(history)
-            est = self.model.estimates(vec, t)
-            rank = list(reversed(NP.argsort(est[:, t])))
-            result[idx] = rank.index(self.namespace.index(refpoi)) + 1      # rank should start from 1 because to MRR
+        history = tr[:-1]
+        refpoi, t = tr[-1]['poi'], self.vectorizor.get_timeslot(tr[-1]['tick'])
+        vec = self.vectorizor.process(history)
+        est = self.model.estimates(vec, t)
+        rank = list(reversed(NP.argsort(est[:, t])))
+        result = rank.index(self.namespace.index(refpoi)) + 1      # rank should start from 1 because to MRR
         return result
 
 
@@ -161,13 +159,17 @@ def experiment():
     LOGGER.info('Reading data from %s', city)
     data = data_provider.get_data()
     LOGGER.info('Predicting %s', poicol)
-    for trainset, testset in folds(data, 10):
+    for testset, trainset in folds(data, 10):
         m = ColfilterModel(data_provider.get_namespace(), veclen, '20|CosineSimilarity()|LinearCombination()', '(0.,24*3600.)|gaussian|(3600.,)')
         LOGGER.info('Training...')
-        m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
+        train_tr = [tr for tr in TrailGen(trainset, lambda x:x['trail_id'])]
+        test_tr = [tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]
+        m.train(train_tr)
+        LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
+        LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
         LOGGER.info('Testing...')
-        for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]):
-            print e
+        for tr in test_tr:
+            print m.evaluate(tr)
 
 
 def test_model():
@@ -205,5 +207,6 @@ def test_model():
 
 
 if __name__ == '__main__':
-    #experiment()
-    test_model()
+    #import profile
+    #profile.run('experiment()')
+    experiment()

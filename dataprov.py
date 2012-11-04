@@ -12,6 +12,9 @@ __version__ = '0.0.1'
 
 
 import logging
+logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
+
 from datetime import datetime
 
 
@@ -21,7 +24,7 @@ class MySQLData(object):
     def __init__(self, city, poicol):
         super(MySQLData, self).__init__()
         import MySQLdb as sql
-        logging.info('Using MySQL data provider')
+        LOGGER.info('Using MySQL data provider')
         self.city, self.poicol = city, poicol
         if self.poicol == 'base':
             idname = 'base'
@@ -46,7 +49,7 @@ class MySQLData(object):
                                 where c.isbot is null and p.city='%s'
                                 order by c.uid, c.created_at''' %
                                 (colname, 'checkins_6', self.city))
-        logging.info('Total Checkins: %d' % (total,))
+        LOGGER.info('Total Checkins: %d' % (total,))
         self.data = list(cur)
 
     def get_namespace(self):
@@ -65,15 +68,17 @@ class TextData(object):
     """
     def __init__(self, datafile, nsfile):
         super(TextData, self).__init__()
-        logging.info('Using text data provider')
+        datapath = 'data/%s_%s_data.table' % (datafile, nsfile)
+        nspath = 'data/%s_ns.table' % (nsfile,)
+        LOGGER.info('Text data provider: ' + datapath + ', ' + nspath)
         self.data = list()
         self.namespace = list()
-        with open('data/%s_%s_data.table' % (datafile, nsfile)) as fin:
+        with open(datapath) as fin:
             for line in fin:
                 tr_id, poi, tick = line.strip().split('\t')
                 tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S')}
                 self.data.append(tmp)
-        with open('data/%s_ns.table' % (nsfile,)) as fin:
+        with open(nspath) as fin:
             for line in fin:
                 self.namespace.append(line.strip())
 

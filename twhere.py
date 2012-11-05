@@ -23,6 +23,7 @@ try:
 except:
     LOGGER.warn('Failed set resource limits.')
 
+from random import shuffle
 
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
@@ -54,17 +55,14 @@ class PredictingMajority(object):
 
         self.majority = sorted(self.dist.iteritems, key=lambda x: x[1], reverse=True)[0][0]
 
-    def evaluate(self, trails):
+    def evaluate(self, tr):
         """ predicting the last
         """
-        from random import shuffle
-        result = NP.zeros(len(trails), dtype=NP.int32)
-        for idx, tr in enumerate(trails):
-            rank = list(self.namespace)
-            shuffle(rank)
-            pos = rank.index(self.majority)
-            rank[0], rank[pos] = rank[pos], rank[0]
-            result[idx] = rank.index(tr[-1]['poi']) + 1
+        rank = list(self.namespace)
+        shuffle(rank)
+        pos = rank.index(self.majority)
+        rank[0], rank[pos] = rank[pos], rank[0]
+        result = rank.index(tr[-1]['poi']) + 1
         return result
 
 
@@ -78,17 +76,14 @@ class PredictingLast(object):
     def train(self, trails):
         pass
 
-    def evaluate(self, trails):
+    def evaluate(self, tr):
         """ predicting the last
         """
-        from random import shuffle
-        result = NP.zeros(len(trails), dtype=NP.int32)
-        for idx, tr in enumerate(trails):
-            rank = list(self.namespace)
-            shuffle(rank)
-            pos = rank.index(tr[-2]['poi'])
-            rank[0], rank[pos] = rank[pos], rank[0]
-            result[idx] = rank.index(tr[-1]['poi']) + 1
+        rank = list(self.namespace)
+        shuffle(rank)
+        pos = rank.index(tr[-2]['poi'])
+        rank[0], rank[pos] = rank[pos], rank[0]
+        result = rank.index(tr[-1]['poi']) + 1
         return result
 
 
@@ -150,17 +145,23 @@ def experiment():
     """ running the experiment
     """
     # Parameters
+    if len(sys.argv) < 5:
+        LOGGER.error('Insufficient number of parameters')
+        LOGGER.info('Usage: twhere.py <city-id> <category|base> <vdb_str> <kr_str> <veclen>')
+        sys.exit(-1)
     city = sys.argv[1]
-    poicol = 'category'
+    poicol = sys.argv[2]
+    vdb_str = sys.argv[3]  # e.g., '20|CosineSimilarity()|LinearCombination()'
+    kr_str = sys.argv[4]   # e.g., '(0.,24*3600.)|gaussian|(3600.,)'
+    veclen = int(sys.argv[5])
     data_provider = TextData(city, poicol)
-    veclen = 100
 
     # Experiment
     LOGGER.info('Reading data from %s', city)
     data = data_provider.get_data()
     LOGGER.info('Predicting %s', poicol)
     for testset, trainset in folds(data, 10):
-        m = ColfilterModel(data_provider.get_namespace(), veclen, '20|CosineSimilarity()|LinearCombination()', '(0.,24*3600.)|gaussian|(3600.,)')
+        m = ColfilterModel(data_provider.get_namespace(), veclen, vdb_str, kr_str)
         LOGGER.info('Training...')
         train_tr = [tr for tr in TrailGen(trainset, lambda x:x['trail_id'])]
         test_tr = [tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]

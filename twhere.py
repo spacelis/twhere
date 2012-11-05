@@ -160,7 +160,8 @@ def experiment():
     LOGGER.info('Reading data from %s', city)
     data = data_provider.get_data()
     LOGGER.info('Predicting %s', poicol)
-    for testset, trainset in folds(data, 10):
+    for fold_id, (testset, trainset) in enumerate(folds(data, 10)):
+        LOGGER.info('Fold: %d/%d' % (fold_id, 10))
         m = ColfilterModel(data_provider.get_namespace(), veclen, vdb_str, kr_str)
         LOGGER.info('Training...')
         train_tr = [tr for tr in TrailGen(trainset, lambda x:x['trail_id'])]

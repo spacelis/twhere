@@ -8,6 +8,10 @@ History: 0.1.0 The first version.
 __version__ = '0.1.0'
 __author__ = 'SpaceLis'
 
+import logging
+logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
+
 import numpy as NP
 import math
 from datetime import datetime
@@ -43,6 +47,13 @@ def TrailGen(seq, key=lambda x: x, diff=None):
         if diff:
             u = diff(s)
     yield trail
+
+
+def TrailSet(seq, minlen=1):
+    """ Generating a trail set by truncating trail in to shorter lengths
+    """
+    for l in range(minlen, len(seq) + 1):
+        yield seq[:l]
 
 
 class TimeParser(object):
@@ -89,7 +100,7 @@ class TimeParser(object):
 class Vectorizor(object):
     """ Make trail into vectors
     """
-    def __init__(self, namespace, veclen, timeparser=TimeParser()):
+    def __init__(self, namespace, veclen=100, timeparser=TimeParser()):
         super(Vectorizor, self).__init__()
         self.namespace, self.veclen = namespace, veclen
         self.unit = float(TRAILSECONDS) / veclen
@@ -105,7 +116,7 @@ class Vectorizor(object):
 class BinaryVectorizor(Vectorizor):
     """ Vectorizing trail as a 0-1 string each element of which indicates the presence of user at a location (type)
     """
-    def __init__(self, namespace, veclen, timeparser=TimeParser(), isaccum=False):
+    def __init__(self, namespace, veclen=100, timeparser=TimeParser(), isaccum=False):
         super(BinaryVectorizor, self).__init__(namespace, veclen, timeparser)
         if isaccum:
             self.process = self.process_accum
@@ -137,8 +148,11 @@ class BinaryVectorizor(Vectorizor):
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, veclen, interval=(0., 24 * 3600.), kernel='gaussian', params=(3600,), timeparser=TimeParser(), isaccum=False):
+    def __init__(self, namespace, veclen=100, interval=(0., 24 * 3600.), kernel='gaussian', params=(3600,), isaccum=False, timeparser=TimeParser(), normalized=False):
         super(KernelVectorizor, self).__init__(namespace, veclen, timeparser)
+        LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, isaccum=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(isaccum), str(timeparser), str(normalized)))
+        self.veclen = veclen
+        self.normalized = normalized
         self.kernel = kernel
         self.params = params
         self.axis = NP.linspace(*interval, num=veclen, endpoint=False)
@@ -155,8 +169,9 @@ class KernelVectorizor(Vectorizor):
             idx = self.namespace.index(poi)
             vec[idx][:] = kernel_smooth(self.axis, [self.timeparser.parse(c['tick']) for c in checkins], self.params, aggr=self.aggr, kernel=KERNELS[self.kernel])
         NP.add(vec, EPSILON, vec)
-        unity = NP.sum(vec, axis=0)
-        NP.divide(vec, unity, vec)
+        if self.normalized:
+            unity = NP.sum(vec, axis=0)
+            NP.divide(vec, unity, vec)
         return vec
 
     def get_timeslot(self, t):
@@ -174,6 +189,14 @@ def testTrailGen():
     a = [[1, 2], [1, 4], [2, 3], [2, 3], [2, 7], [3, 7], [3, 7], [3, 3]]
     for t in TrailGen(a, lambda x: x[0]):
         print t
+
+
+def testTrailSet():
+    """
+    """
+    a = [1, 2, 3, 4]
+    for x in TrailSet(a):
+        print x
 
 
 def testBinaryVectorizor():

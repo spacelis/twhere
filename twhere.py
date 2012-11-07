@@ -11,17 +11,11 @@ __author__ = 'SpaceLis'
 
 import sys
 import logging
-logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.DEBUG)
 LOGGER = logging.getLogger(__name__)
 
 import site
 site.addsitedir('../model')
-
-try:
-    import resource
-    resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
-except:
-    LOGGER.warn('Failed set resource limits.')
 
 from random import shuffle
 
@@ -30,6 +24,7 @@ NP.seterr(all='warn', under='ignore')
 
 from model.colfilter import VectorDatabase
 from trail import TrailGen
+from trail import TrailSet
 from trail import KernelVectorizor
 from trail import TimeParser
 from dataprov import TextData
@@ -52,8 +47,7 @@ class PredictingMajority(object):
         for tr in trails:
             for c in tr:
                 self.dist[c['poi']] += 1
-
-        self.majority = sorted(self.dist.iteritems, key=lambda x: x[1], reverse=True)[0][0]
+        self.majority = sorted(self.dist.iteritems(), key=lambda x: x[1], reverse=True)[0][0]
 
     def evaluate(self, tr):
         """ predicting the last
@@ -90,41 +84,31 @@ class PredictingLast(object):
 class ColfilterModel(object):
     """ Using cofilter with vectorized trails
     """
-    def __init__(self, namespace, veclen, vdbstr, kernel):
+    def __init__(self, namespace, vdb_conf, krl_conf):
         """ Constructor
 
             Arguments:
                 namespace -- the predicting classes
                 veclen -- the length of vectors
-                vdbstr -- a string for configuring VectorDatabase, e.g., '20|CosineSimilarity()|LinearCombination()'
-                kernel -- a string representing kernel used, e.g. 'gaussian|(3600,)'
+                vdb_conf -- a string for configuring VectorDatabase, e.g., '{"simnum": 20, "similarity": CosineSimilarity(), "aggregator": LinearCombination()}'
+                krl_conf -- a string representing kernel used, e.g. '{"veclen": 100, "interval": (0., 24*3600.), "kernel": "gaussian", "params": (3600.,), "isaccum": False, "normalized": False}'
         """
         super(ColfilterModel, self).__init__()
+        LOGGER.debug('VDBCONF=' + vdb_conf)
+        LOGGER.debug('KRLCONF=' + krl_conf)
         self.namespace = namespace
-        self.veclen = veclen
         self.timeparser = TimeParser()
         # Prepare model with kernel specification
-        kparams = list()
-        for s in kernel.split('|'):
-            try:
-                kparams.append(eval(s))
-            except NameError:
-                kparams.append(s)
-        self.vectorizor = KernelVectorizor(namespace, veclen, *kparams)
-        vparams = list()
-        for s in vdbstr.split('|'):
-            try:
-                vparams.append(eval(s))
-            except NameError:
-                vparams.append(s)
-        self.model = VectorDatabase(*vparams)
-        LOGGER.info('KENEL: ' + str(kparams))
-        LOGGER.info('VectorDB: ' + str(vparams))
+        kparams = eval(krl_conf)
+        kparams["namespace"] = namespace
+        self.vectorizor = KernelVectorizor(**kparams)
+        vparams = eval(vdb_conf)
+        self.model = VectorDatabase(**vparams)
 
     def train(self, trails):
         """ Train the model
         """
-        self.vecs = NP.zeros((len(trails), len(self.namespace), self.veclen), dtype=NP.float32)
+        self.vecs = NP.zeros((len(trails), len(self.namespace), self.vectorizor.veclen), dtype=NP.float32)
         for idx, tr in enumerate(trails):
             self.vecs[idx, :, :] = self.vectorizor.process(tr)
         self.model.load_data(self.vecs)
@@ -145,15 +129,16 @@ def experiment():
     """ running the experiment
     """
     # Parameters
-    if len(sys.argv) < 5:
+    if len(sys.argv) < 3:
         LOGGER.error('Insufficient number of parameters')
-        LOGGER.info('Usage: twhere.py <city-id> <category|base> <vdb_str> <kr_str> <veclen>')
+        LOGGER.info('Usage: twhere.py <city-id> {category|base} <model> [<vdb_str> <krl_str>]')
         sys.exit(-1)
     city = sys.argv[1]
     poicol = sys.argv[2]
-    vdb_str = sys.argv[3]  # e.g., '20|CosineSimilarity()|LinearCombination()'
-    kr_str = sys.argv[4]   # e.g., '(0.,24*3600.)|gaussian|(3600.,)'
-    veclen = int(sys.argv[5])
+    modelname = sys.argv[3]
+    if modelname == 'colfilter':
+        vdb_str = sys.argv[4]  # see ColfilterModel()
+        krl_str = sys.argv[5]
     data_provider = TextData(city, poicol)
 
     # Experiment
@@ -161,8 +146,18 @@ def experiment():
     data = data_provider.get_data()
     LOGGER.info('Predicting %s', poicol)
     for fold_id, (testset, trainset) in enumerate(folds(data, 10)):
-        LOGGER.info('Fold: %d/%d' % (fold_id, 10))
-        m = ColfilterModel(data_provider.get_namespace(), veclen, vdb_str, kr_str)
+        LOGGER.info('Fold: %d/%d' % (fold_id + 1, 10))
+        if modelname == 'colfilter':
+            m = ColfilterModel(data_provider.get_namespace(), vdb_str, krl_str)
+        elif modelname == 'last':
+            m = PredictingLast(data_provider.get_namespace())
+        elif modelname == 'major':
+            m = PredictingMajority(data_provider.get_namespace())
+        else:
+            LOGGER.error('The model specified does not exist: %s' % (modelname, ))
+            LOGGER.info('colfilter, last, major')
+            sys.exit(-2)
+
         LOGGER.info('Training...')
         train_tr = [tr for tr in TrailGen(trainset, lambda x:x['trail_id'])]
         test_tr = [tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]
@@ -170,8 +165,11 @@ def experiment():
         LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
         LOGGER.info('Testing...')
-        for tr in test_tr:
-            print m.evaluate(tr)
+        for trail in test_tr:
+            print m.evaluate(trail)
+            LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
+            #for tr in TrailSet(trail, 3):
+                #print m.evaluate(tr)
 
 
 def test_model():
@@ -211,4 +209,11 @@ def test_model():
 if __name__ == '__main__':
     #import profile
     #profile.run('experiment()')
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
+    except:
+        LOGGER.warn('Failed set resource limits.')
+
+    LOGGER.debug('DEBUG is enabled')
     experiment()

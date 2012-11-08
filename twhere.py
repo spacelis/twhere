@@ -11,7 +11,7 @@ __author__ = 'SpaceLis'
 
 import sys
 import logging
-logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 import site
@@ -170,6 +170,7 @@ def experiment():
             LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
             #for tr in TrailSet(trail, 3):
                 #print m.evaluate(tr)
+        sys.exit(0)
 
 
 def test_model():
@@ -207,8 +208,6 @@ def test_model():
 
 
 if __name__ == '__main__':
-    #import profile
-    #profile.run('experiment()')
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
@@ -216,4 +215,6 @@ if __name__ == '__main__':
         LOGGER.warn('Failed set resource limits.')
 
     LOGGER.debug('DEBUG is enabled')
-    experiment()
+    #experiment()
+    import profile
+    profile.run('experiment()')

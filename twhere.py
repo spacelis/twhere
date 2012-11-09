@@ -170,7 +170,6 @@ def experiment():
             LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
             #for tr in TrailSet(trail, 3):
                 #print m.evaluate(tr)
-        sys.exit(0)
 
 
 def test_model():
@@ -198,11 +197,12 @@ def test_model():
 
     testset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in test]
 
-    m = ColfilterModel(['home', 'ewi', 'canteen'], 24, '20|CosineSimilarity()|LinearCombination()', '(0., 24*3600.)|gaussian|(3600.,)')
+    m = ColfilterModel(['home', 'ewi', 'canteen'], "{'simnum': 24, 'similarity': CosineSimilarity(), 'aggregator': LinearCombination()}", "{'veclen': 100, 'interval': (0.,24*3600.), 'kernel': 'gaussian', 'params': (3600.,), 'isaccum': True}")
     LOGGER.info('Training...')
     m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
     LOGGER.info('Testing...')
-    for e in m.evaluate([tr for tr in TrailGen(testset, lambda x:x['trail_id'])]):
+    for tr in TrailGen(testset, lambda x:x['trail_id']):
+        e = m.evaluate(tr)
         print e
         assert_equal(e, 1)
 
@@ -215,6 +215,6 @@ if __name__ == '__main__':
         LOGGER.warn('Failed set resource limits.')
 
     LOGGER.debug('DEBUG is enabled')
-    #experiment()
-    import profile
-    profile.run('experiment()')
+    experiment()
+    #import profile
+    #profile.run('experiment()')

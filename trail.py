@@ -21,7 +21,7 @@ from model.colfilter import KERNELS
 
 
 TRAILSECONDS = 24 * 3600
-EPSILON = 1e-20
+EPSILON = 1e-10
 
 
 def TrailGen(seq, key=lambda x: x, diff=None):

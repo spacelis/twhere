@@ -166,8 +166,8 @@ def experiment():
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
         LOGGER.info('Testing...')
         for trail in test_tr:
-            print m.evaluate(trail)
             LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
+            print m.evaluate(trail)
             #for tr in TrailSet(trail, 3):
                 #print m.evaluate(tr)
 

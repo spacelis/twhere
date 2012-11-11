@@ -1,20 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # New York, Chicago, Los Angeles, San Francisco
+set -e
 retdir=$1
-simtype=$2
+model=$2
 if [ ! -d $retdir ]; then
 	mkdir $retdir
 fi
-
-for simnum in "5" "10" "20" "50" "100"
-do 
-	for sigma in "7200" "3600" "1800" "900"
-	do
-		for city in "NY 27485069891a7938" "CH 1d9a5370a355ab0c" "LA 3b77caf94bfc81fe" "SF 5a110d312052166f"
+veclen=100
+if [ $model == "colfilter" ]; then
+	for simnum in 100 50 20 10 5
+	do 
+		for sigma in 7200. 3600. 1800. 900. 450.
 		do
-			set -- $city
-			echo Running $1 $simnum $sigma on ${simtype}
-			./ppython twhere.py $2 $simnum $sigma >$retdir/$1_sm${sigma}_in${simnum}_${simtype}.result
+			for city in "NY 27485069891a7938" "CH 1d9a5370a355ab0c" "LA 3b77caf94bfc81fe" "SF 5a110d312052166f"
+			do
+				set -- $city
+				#echo Running $1 $simnum $sigma on ${simtype}
+				#./ppython twhere.py $2 $simnum $sigma >$retdir/$1_sm${sigma}_in${simnum}_${simtype}.result
+				echo Running $1
+				python twhere.py $2 category colfilter "{'simnum': $simnum, 'similarity': CosineSimilarity(), 'aggregator': LinearCombination()}" "{'veclen': $veclen, 'interval': (0.,24*3600.), 'kernel': 'gaussian', 'params': ($sigma,), 'isaccum': True}" > $retdir/$1_cosprob_n$(printf "%03d" $simnum)_s$(printf "%04.0f" $sigma).result
+			done
 		done
 	done
-done
+else
+	for city in "NY 27485069891a7938" "CH 1d9a5370a355ab0c" "LA 3b77caf94bfc81fe" "SF 5a110d312052166f"
+	do
+		set -- $city
+		#echo Running $1 $simnum $sigma on ${simtype}
+		#./ppython twhere.py $2 $simnum $sigma >$retdir/$1_sm${sigma}_in${simnum}_${simtype}.result
+		echo Running $1
+		python twhere.py $2 category $model > $retdir/$1_${model}.result
+	done
+fi
+

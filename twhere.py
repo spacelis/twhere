@@ -201,7 +201,7 @@ def test_model():
     LOGGER.info('Training...')
     m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
     LOGGER.info('Testing...')
-    for tr in TrailGen(testset, lambda x:x['trail_id']):
+    for tr in TrailGen(testset, lambda x: x['trail_id']):
         e = m.evaluate(tr)
         print e
         assert_equal(e, 1)

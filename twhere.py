@@ -24,7 +24,7 @@ NP.seterr(all='warn', under='ignore')
 
 from model.colfilter import VectorDatabase
 from trail import TrailGen
-from trail import TrailSet
+from trail import TrailSetTransition
 from trail import KernelVectorizor
 from trail import TimeParser
 from dataprov import TextData
@@ -166,10 +166,10 @@ def experiment():
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
         LOGGER.info('Testing...')
         for trail in test_tr:
-            LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
-            print m.evaluate(trail)
-            #for tr in TrailSet(trail, 3):
-                #print m.evaluate(tr)
+            #LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
+            #print m.evaluate(trail)
+            for tr in TrailSetTransition(trail, 3):
+                print m.evaluate(tr)
 
 
 def test_model():

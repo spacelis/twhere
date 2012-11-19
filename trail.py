@@ -49,11 +49,19 @@ def TrailGen(seq, key=lambda x: x, diff=None):
     yield trail
 
 
-def TrailSet(seq, minlen=1):
+def TrailSet(seq, minlen=2):
     """ Generating a trail set by truncating trail in to shorter lengths
     """
     for l in range(minlen, len(seq) + 1):
         yield seq[:l]
+
+
+def TrailSetTransition(seq, minlen=2, key=lambda x: x):
+    """ Generating a trail set similar as TrailSet but ensure reference poi is different from the last observision
+    """
+    for l in range(minlen, len(seq) + 1):
+        if key(seq[l - 1]) != key(seq[l - 2]):
+            yield seq[:l]
 
 
 class TimeParser(object):
@@ -186,17 +194,34 @@ class KernelVectorizor(Vectorizor):
 def testTrailGen():
     """ Test TrailGen
     """
-    a = [[1, 2], [1, 4], [2, 3], [2, 3], [2, 7], [3, 7], [3, 7], [3, 3]]
-    for t in TrailGen(a, lambda x: x[0]):
-        print t
+    testinput = [[1, 2], [1, 4], [2, 3], [2, 3], [2, 7], [3, 7], [3, 7], [3, 3]]
+    testoutput = [
+        [[1, 2], [1, 4]],
+        [[2, 3], [2, 3], [2, 7]],
+        [[3, 7], [3, 7], [3, 3]]]
+    for x, y in zip(TrailGen(testinput, lambda x: x[0]), testoutput):
+        assert x == y, '%s expected, but %s' % (y, x)
 
 
 def testTrailSet():
     """
     """
-    a = [1, 2, 3, 4]
-    for x in TrailSet(a):
-        print x
+    testinput = [1, 2, 2, 4]
+    testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
+    for x, y in zip(TrailSet(testinput), testoutput):
+        assert x == y, '%s expected, but %s' % (y, x)
+
+
+def testTrailSetTransition():
+    """
+    """
+    testinput = [1, 2, 2, 3, 4]
+    testoutput = [
+        [1, 2],
+        [1, 2, 2, 3],
+        [1, 2, 2, 3, 4]]
+    for x, y in zip(TrailSetTransition(testinput), testoutput):
+        assert x == y, '%s expected, but %s' % (y, x)
 
 
 def testBinaryVectorizor():
@@ -207,18 +232,17 @@ def testBinaryVectorizor():
     data = [
         "a 2010-12-13 04:07:12",
         "b 2010-12-13 04:20:39",
-        "c 2010-12-13 06:09:51",
-    ]
+        "c 2010-12-13 06:09:51"]
     tr = [{"poi": x, "tick": datetime.strptime(y, '%Y-%m-%d %H:%M:%S')} for x, y in [s.split(' ', 1) for s in data]]
-    print bvz.process(tr)
+    assert_equal(bvz.process(tr),
+                 [[0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.],
+                  [0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.],
+                  [0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.]])
 
 
 def testKernelVectorizor():
     """
     """
-    from datetime import datetime
-    from matplotlib import pyplot as PLT
-    from numpy.testing import assert_equal
     kvz = KernelVectorizor(['a', 'b', 'c'], 24)
     data = [
         "a 2010-12-13 04:07:12",
@@ -236,6 +260,9 @@ def testKernelVectorizor():
 
 if __name__ == '__main__':
     names = dict(globals())
+    from matplotlib import pyplot as PLT
+    from numpy.testing import assert_equal
     testfuncnames = [name for name in names if name.startswith('test')]
     for funcname in testfuncnames:
+        print 'Running...', funcname
         globals()[funcname]()

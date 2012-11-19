@@ -23,8 +23,8 @@ import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
 from model.colfilter import VectorDatabase
-from trail import TrailGen
-from trail import TrailSetTransition
+from trail import itertrails
+from trail import subtrails
 from trail import KernelVectorizor
 from trail import TimeParser
 from dataprov import TextData
@@ -159,8 +159,8 @@ def experiment():
             sys.exit(-2)
 
         LOGGER.info('Training...')
-        train_tr = [tr for tr in TrailGen(trainset, lambda x:x['trail_id'])]
-        test_tr = [tr for tr in TrailGen(testset, lambda x:x['trail_id']) if len(tr) > 5]
+        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id'])]
+        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 5]
         m.train(train_tr)
         LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
@@ -168,7 +168,7 @@ def experiment():
         for trail in test_tr:
             #LOGGER.debug('Trail ID: ' + trail[0]['trail_id'])
             #print m.evaluate(trail)
-            for tr in TrailSetTransition(trail, 3):
+            for tr in subtrails(trail, 3):
                 print m.evaluate(tr)
 
 
@@ -199,9 +199,9 @@ def test_model():
 
     m = ColfilterModel(['home', 'ewi', 'canteen'], "{'simnum': 24, 'similarity': CosineSimilarity(), 'aggregator': LinearCombination()}", "{'veclen': 100, 'interval': (0.,24*3600.), 'kernel': 'gaussian', 'params': (3600.,), 'isaccum': True}")
     LOGGER.info('Training...')
-    m.train([tr for tr in TrailGen(trainset, lambda x:x['trail_id'])])
+    m.train([tr for tr in itertrails(trainset, lambda x:x['trail_id'])])
     LOGGER.info('Testing...')
-    for tr in TrailGen(testset, lambda x: x['trail_id']):
+    for tr in itertrails(testset, lambda x: x['trail_id']):
         e = m.evaluate(tr)
         print e
         assert_equal(e, 1)

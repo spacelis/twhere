@@ -24,8 +24,13 @@ TRAILSECONDS = 24 * 3600
 EPSILON = 1e-10
 
 
-def TrailGen(seq, key=lambda x: x, diff=None):
+def itertrails(seq, key=lambda x: x, diff=None):
     """ A generating function for trails
+
+        Arguments:
+            seq -- a trail
+            key -- a key function used for segmenting a trail into several trails, working like itertools.groupby()
+            diff -- a function making each generated trail has no consecutive checkins at the same place.
     """
     k = None
     trail = None
@@ -49,16 +54,16 @@ def TrailGen(seq, key=lambda x: x, diff=None):
     yield trail
 
 
-def TrailSet(seq, minlen=2):
+def subtrails(seq, minlen=2, key=lambda x: itertools.cycle('01')):
     """ Generating a trail set by truncating trail in to shorter lengths
-    """
-    for l in range(minlen, len(seq) + 1):
-        yield seq[:l]
 
-
-def TrailSetTransition(seq, minlen=2, key=lambda x: x):
-    """ Generating a trail set similar as TrailSet but ensure reference poi is different from the last observision
+        Arguments:
+            seq -- a trail
+            minlen -- a minimum length of genereated trails
+            key -- a function of differeciating the last two elements, making sure that key(subtrail[-1]) != key(subtrail[-2])
     """
+    if minlen < 2:
+        raise ValueError('The minimum length of a subtrail should be at least 2')
     for l in range(minlen, len(seq) + 1):
         if key(seq[l - 1]) != key(seq[l - 2]):
             yield seq[:l]
@@ -191,28 +196,28 @@ class KernelVectorizor(Vectorizor):
 # -------------------------------------------------
 # TESTS
 #
-def testTrailGen():
-    """ Test TrailGen
+def testIterTrails():
+    """ Test itertrails
     """
     testinput = [[1, 2], [1, 4], [2, 3], [2, 3], [2, 7], [3, 7], [3, 7], [3, 3]]
     testoutput = [
         [[1, 2], [1, 4]],
         [[2, 3], [2, 3], [2, 7]],
         [[3, 7], [3, 7], [3, 3]]]
-    for x, y in zip(TrailGen(testinput, lambda x: x[0]), testoutput):
+    for x, y in zip(itertrails(testinput, lambda x: x[0]), testoutput):
         assert x == y, '%s expected, but %s' % (y, x)
 
 
-def testTrailSet():
+def testSubTrails():
     """
     """
     testinput = [1, 2, 2, 4]
     testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
-    for x, y in zip(TrailSet(testinput), testoutput):
+    for x, y in zip(subtrails(testinput), testoutput):
         assert x == y, '%s expected, but %s' % (y, x)
 
 
-def testTrailSetTransition():
+def testSubTrailsTransition():
     """
     """
     testinput = [1, 2, 2, 3, 4]
@@ -220,8 +225,10 @@ def testTrailSetTransition():
         [1, 2],
         [1, 2, 2, 3],
         [1, 2, 2, 3, 4]]
-    for x, y in zip(TrailSetTransition(testinput), testoutput):
+    for x, y in zip(subtrails(testinput, key=lambda x: x), testoutput):
         assert x == y, '%s expected, but %s' % (y, x)
+    for x in subtrails([]):
+        raise AssertionError('Should not see me as empty list has no sub_trails')
 
 
 def testBinaryVectorizor():

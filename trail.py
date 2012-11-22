@@ -17,7 +17,7 @@ import math
 from datetime import datetime
 import itertools
 from model.colfilter import kernel_smooth
-from model.colfilter import KERNELS
+from model.colfilter import gaussian_pdf
 
 
 TRAILSECONDS = 24 * 3600
@@ -161,7 +161,7 @@ class BinaryVectorizor(Vectorizor):
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, veclen=100, interval=(0., 24 * 3600.), kernel='gaussian', params=(3600,), isaccum=False, timeparser=TimeParser(), normalized=False):
+    def __init__(self, namespace, veclen=100, interval=(0., 24 * 3600.), kernel=gaussian_pdf, params=(3600,), isaccum=False, timeparser=TimeParser(), normalized=False):
         super(KernelVectorizor, self).__init__(namespace, veclen, timeparser)
         LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, isaccum=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(isaccum), str(timeparser), str(normalized)))
         self.veclen = veclen

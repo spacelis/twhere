@@ -21,6 +21,7 @@ import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
 from model.colfilter import VectorDatabase
+from model.mm import MarkovModel
 from trail import itertrails
 from trail import subtrails
 from trail import KernelVectorizor
@@ -84,11 +85,18 @@ class MarkovChainModel(object):
     def __init__(self, namespace):
         super(MarkovChainModel, self).__init__()
         self.namespace = namespace
+        self.model = MarkovModel(self.namespace)
 
-    def trail(self, trails):
+    def train(self, trails):
         """ Train the model
         """
-        pass
+        self.model.learn_from([[c['poi'] for c in tr] for tr in trails])
+
+    def evaluate(self, tr):
+        """ Evaluate the model by trails
+        """
+        history, refpoi = [c['poi'] for c in tr[:-1]], tr[-1]['poi']
+        return self.model.rank_next(history[-1]).index(refpoi) + 1
 
 
 class ColfilterModel(object):

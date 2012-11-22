@@ -38,6 +38,12 @@ def experimentColfilter(poicol, resdir):
             coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
 
 
+def experimentMarkovModel(poicol, resdir):
+    """docstring for experimentColfilter
+    """
+    coreloop(poicol, MarkovChainModel, resdir, 'mm')
+
+
 if __name__ == '__main__':
     LOGGER.debug('DEBUG is enabled')
     try:
@@ -49,6 +55,7 @@ if __name__ == '__main__':
     resdir = sys.argv[1]
     if not os.path.isdir(resdir):
         os.mkdir(resdir)
-    experimentColfilter('category', resdir)
+    #experimentColfilter('category', resdir)
+    experimentMarkovModel('category', resdir)
     #import profile
     #profile.run('experiment()')

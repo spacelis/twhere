@@ -180,7 +180,7 @@ class KernelVectorizor(Vectorizor):
         vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
         for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
             idx = self.namespace.index(poi)
-            vec[idx][:] = kernel_smooth(self.axis, [self.timeparser.parse(c['tick']) for c in checkins], self.params, aggr=self.aggr, kernel=KERNELS[self.kernel])
+            vec[idx][:] = kernel_smooth(self.axis, [self.timeparser.parse(c['tick']) for c in checkins], self.params, aggr=self.aggr, kernel=self.kernel)
         NP.add(vec, EPSILON, vec)
         if self.normalized:
             unity = NP.sum(vec, axis=0)

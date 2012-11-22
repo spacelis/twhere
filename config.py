@@ -26,7 +26,7 @@ HISTDAMP_PARAM = {"veclen": 100,
                   "params": {'l': 1 / 3600.}}
 
 VECTORDB_PARAM = {"simnum": 20,
-                  "similarity": CosineSimilarity(HistoryDamper(**HISTDAMP_PARAM)),
+                  "similarity": CosineSimilarity([HistoryDamper(**HISTDAMP_PARAM),]),
                   "aggregator": LinearCombination()}
 
 VECTORIZOR_PARAM = {"veclen": 100,

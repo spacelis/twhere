@@ -143,6 +143,14 @@ def run_test(model, trail):
     return rank.index(ref['poi']) + 1
 
 
+def print_trail(trail):
+    """ printing trail in a compact way
+    """
+    pois = [c['poi'][-8:-4] for c in trail]
+    ticks = [c['tick'].strftime('%H:%M:%S') for c in trail]
+    print zip(pois, ticks)
+
+
 def run_experiment(city, poicol, model, output):
     """ running the experiment
     """
@@ -157,7 +165,7 @@ def run_experiment(city, poicol, model, output):
 
         LOGGER.info('Training...')
         train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id']) if len(tr)]
-        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 2]
+        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 5]
         m.train(train_tr)
 
         LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
@@ -166,7 +174,8 @@ def run_experiment(city, poicol, model, output):
 
         test_cnt = 0
         for trail in test_tr:
-            for trl in subtrails(trail, len(trail)): # only run on entire trail
+            #for trl in subtrails(trail, len(trail)): # only run on entire trail
+            for trl in subtrails(trail, minlen=5):  # only run on entire trail
                 print >> output, run_test(m, trail)
                 test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))

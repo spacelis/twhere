@@ -47,14 +47,13 @@ class PredictingMajority(object):
                 self.dist[c['poi']] += 1
         self.majority = sorted(self.dist.iteritems(), key=lambda x: x[1], reverse=True)[0][0]
 
-    def predict(self, tr, t):
+    def predict(self, tr, tick):
         """ predicting the last
         """
         rank = list(self.namespace)
         shuffle(rank)
         pos = rank.index(self.majority)
         rank[0], rank[pos] = rank[pos], rank[0]
-        #result = rank.index(tr[-1]['poi']) + 1
         return rank
 
 
@@ -68,14 +67,13 @@ class PredictingLast(object):
     def train(self, trails):
         pass
 
-    def predict(self, tr, t):
+    def predict(self, tr, tick):
         """ predicting the last
         """
         rank = list(self.namespace)
         shuffle(rank)
         pos = rank.index(tr[-2]['poi'])
         rank[0], rank[pos] = rank[pos], rank[0]
-        #result = rank.index(tr[-1]['poi']) + 1
         return rank
 
 
@@ -92,11 +90,10 @@ class MarkovChainModel(object):
         """
         self.model.learn_from([[c['poi'] for c in tr] for tr in trails])
 
-    def predict(self, tr, t):
+    def predict(self, tr, tick):
         """ Evaluate the model by trails
         """
         history, refpoi = [c['poi'] for c in tr[:-1]], tr[-1]['poi']
-        #return self.model.rank_next(history[-1]).index(refpoi) + 1
         return self.model.rank_next(history[-1])
 
 
@@ -128,10 +125,10 @@ class ColfilterModel(object):
             self.vecs[idx, :, :] = self.vectorizor.process(tr)
         self.model.load_data(self.vecs)
 
-    def predict(self, tr, t):
+    def predict(self, tr, tick):
         """ Predicting with colfilter model
         """
-        t = self.vectorizor.get_timeslot(t)
+        t = self.vectorizor.get_timeslot(tick)
         vec = self.vectorizor.process(tr)
         est = self.model.estimates(vec, t)
         rank = sorted(self.namespace, key=lambda x: est[self.mapping(x), t], reverse=True)
@@ -167,10 +164,12 @@ def run_experiment(city, poicol, model, output):
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
         LOGGER.info('Testing...[Output: %s]' % (output.name,))
 
+        test_cnt = 0
         for trail in test_tr:
-            print >> output, run_test(m, trail)
-            #for trl in subtrails(trail, 2):
-                #print >> output, run_test(m, trail)
+            for trl in subtrails(trail, len(trail)): # only run on entire trail
+                print >> output, run_test(m, trail)
+                test_cnt += 1
+        LOGGER.info('Tested trails: %d' % (test_cnt,))
 
 
 def test_model():

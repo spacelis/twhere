@@ -217,33 +217,27 @@ def testIterTrails():
         [[1, 2], [1, 4]],
         [[2, 3], [2, 3], [2, 7]],
         [[3, 7], [3, 7], [3, 3]]]
-    cnt = 0
-    for x, y in zip(itertrails(testinput, lambda x: x[0]), testoutput):
+    from itertools import izip_longest
+    for x, y in izip_longest(itertrails(testinput, lambda x: x[0]), testoutput):
         assert x == y, '%s expected, but %s' % (y, x)
-        cnt += 1
-    assert cnt == len(testoutput), 'Did not exhaust the trails'
 
 
 def testSubTrails():
     """
     """
+    from itertools import izip_longest
+
     testinput = [1, 2, 2, 4]
     testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
-    cnt = 0
-    for x, y in zip(subtrails(testinput), testoutput):
+    for x, y in izip_longest(subtrails(testinput), testoutput):
         print x
         assert x == y, '%s expected, but %s' % (y, x)
-        cnt += 1
-    assert cnt == len(testoutput), 'Did not exhaust the trails %d/%d' % (cnt, len(testoutput))
     for x in subtrails([]):
         raise AssertionError('Should not see me as empty list has no sub_trails')
     for x in subtrails([1]):
         raise AssertionError('Should not see me as a list of length 1 has no sub_trails')
-    cnt = 0
-    for x in subtrails([1, 2, 3, 4, 5], minlen=5):
-        assert x == [1, 2, 3, 4, 5]
-        cnt += 1
-    assert cnt == 1
+    for x, y in izip_longest(subtrails([1, 2, 3, 4, 5], minlen=5), [[1, 2, 3, 4, 5]]):
+        assert x == y, '%s expected, but %s' % (y, x)
     for x in subtrails([1, 2, 3, 4, 5], minlen=6):
         raise AssertionError('Should not see me as minlen > len(list)')
 
@@ -251,23 +245,23 @@ def testSubTrails():
 def testSubTrailsTransition():
     """
     """
+    from itertools import izip_longest
+
     testinput = [1, 2, 2, 3, 4]
     testoutput = [
         [1, 2],
         [1, 2, 2, 3],
         [1, 2, 2, 3, 4]]
-    cnt = 0
-    for x, y in zip(subtrails(testinput, key=lambda x: x), testoutput):
+    for x, y in izip_longest(subtrails(testinput, key=lambda x: x), testoutput):
         print x
         assert x == y, '%s expected, but %s' % (y, x)
-        cnt += 1
-    assert cnt == len(testoutput), 'Did not exhaust the trails'
 
 
 def testBinaryVectorizor():
     """
     """
     from datetime import datetime
+
     bvz = BinaryVectorizor(['a', 'b', 'c'], 24, isaccum=False)
     data = [
         "a 2010-12-13 04:07:12",

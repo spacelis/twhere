@@ -3,9 +3,11 @@
 """File: trail.py
 Description:
     Generating Trails
-History: 0.1.0 The first version.
+History:
+    0.1.1 sufficient tests for existing functions
+    0.1.0 The first version.
 """
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __author__ = 'SpaceLis'
 
 import logging
@@ -24,6 +26,7 @@ TRAILSECONDS = 24 * 3600
 EPSILON = 1e-10
 
 
+#FIXME diff parameter should be tested
 def itertrails(seq, key=lambda x: x, diff=None):
     """ A generating function for trails
 
@@ -54,7 +57,17 @@ def itertrails(seq, key=lambda x: x, diff=None):
     yield trail
 
 
-def subtrails(seq, minlen=2, key=lambda x: itertools.cycle('01')):
+def idgen():
+    """ a genrator of unbounded integers
+    """
+    x = 0
+    while True:
+        yield x
+        x += 1
+
+_IDGEN = idgen()
+
+def subtrails(seq, minlen=2, key=lambda x: _IDGEN.next()):
     """ Generating a trail set by truncating trail in to shorter lengths
 
         Arguments:
@@ -204,8 +217,11 @@ def testIterTrails():
         [[1, 2], [1, 4]],
         [[2, 3], [2, 3], [2, 7]],
         [[3, 7], [3, 7], [3, 3]]]
+    cnt = 0
     for x, y in zip(itertrails(testinput, lambda x: x[0]), testoutput):
         assert x == y, '%s expected, but %s' % (y, x)
+        cnt += 1
+    assert cnt == len(testoutput), 'Did not exhaust the trails'
 
 
 def testSubTrails():
@@ -213,8 +229,23 @@ def testSubTrails():
     """
     testinput = [1, 2, 2, 4]
     testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
+    cnt = 0
     for x, y in zip(subtrails(testinput), testoutput):
+        print x
         assert x == y, '%s expected, but %s' % (y, x)
+        cnt += 1
+    assert cnt == len(testoutput), 'Did not exhaust the trails %d/%d' % (cnt, len(testoutput))
+    for x in subtrails([]):
+        raise AssertionError('Should not see me as empty list has no sub_trails')
+    for x in subtrails([1]):
+        raise AssertionError('Should not see me as a list of length 1 has no sub_trails')
+    cnt = 0
+    for x in subtrails([1, 2, 3, 4, 5], minlen=5):
+        assert x == [1, 2, 3, 4, 5]
+        cnt += 1
+    assert cnt == 1
+    for x in subtrails([1, 2, 3, 4, 5], minlen=6):
+        raise AssertionError('Should not see me as minlen > len(list)')
 
 
 def testSubTrailsTransition():
@@ -225,10 +256,12 @@ def testSubTrailsTransition():
         [1, 2],
         [1, 2, 2, 3],
         [1, 2, 2, 3, 4]]
+    cnt = 0
     for x, y in zip(subtrails(testinput, key=lambda x: x), testoutput):
+        print x
         assert x == y, '%s expected, but %s' % (y, x)
-    for x in subtrails([]):
-        raise AssertionError('Should not see me as empty list has no sub_trails')
+        cnt += 1
+    assert cnt == len(testoutput), 'Did not exhaust the trails'
 
 
 def testBinaryVectorizor():

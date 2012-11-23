@@ -16,7 +16,7 @@ logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', l
 LOGGER = logging.getLogger(__name__)
 from twhere import run_experiment, PredictingMajority, PredictingLast, MarkovChainModel, ColfilterModel
 import os
-from config import *
+from config import VECTORIZOR_PARAM, VECTORDB_PARAM
 
 
 def coreloop(poicol, model, resdir, name):
@@ -24,7 +24,7 @@ def coreloop(poicol, model, resdir, name):
     """
     for city, city_id in zip(['NY', 'CH', 'LA', 'SF'],
                              ['27485069891a7938', '1d9a5370a355ab0c', '3b77caf94bfc81fe', '5a110d312052166f']):
-        run_experiment(city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'w'))
+        run_experiment(city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'a'))
 
 
 def experimentColfilter(poicol, resdir):
@@ -44,6 +44,18 @@ def experimentMarkovModel(poicol, resdir):
     coreloop(poicol, MarkovChainModel, resdir, 'mm')
 
 
+def experimentPredictingMajority(poicol, resdir):
+    """docstring for experimentColfilter
+    """
+    coreloop(poicol, PredictingMajority, resdir, 'pm')
+
+
+def experimentPredictingLast(poicol, resdir):
+    """docstring for experimentColfilter
+    """
+    coreloop(poicol, PredictingLast, resdir, 'pl')
+
+
 if __name__ == '__main__':
     LOGGER.debug('DEBUG is enabled')
     try:
@@ -57,5 +69,7 @@ if __name__ == '__main__':
         os.mkdir(resdir)
     #experimentColfilter('category', resdir)
     experimentMarkovModel('category', resdir)
+    experimentPredictingMajority('category', resdir)
+    experimentPredictingLast('category', resdir)
     #import profile
     #profile.run('experiment()')

@@ -47,15 +47,15 @@ class PredictingMajority(object):
                 self.dist[c['poi']] += 1
         self.majority = sorted(self.dist.iteritems(), key=lambda x: x[1], reverse=True)[0][0]
 
-    def evaluate(self, tr):
+    def predict(self, tr, t):
         """ predicting the last
         """
         rank = list(self.namespace)
         shuffle(rank)
         pos = rank.index(self.majority)
         rank[0], rank[pos] = rank[pos], rank[0]
-        result = rank.index(tr[-1]['poi']) + 1
-        return result
+        #result = rank.index(tr[-1]['poi']) + 1
+        return rank
 
 
 class PredictingLast(object):
@@ -68,15 +68,15 @@ class PredictingLast(object):
     def train(self, trails):
         pass
 
-    def evaluate(self, tr):
+    def predict(self, tr, t):
         """ predicting the last
         """
         rank = list(self.namespace)
         shuffle(rank)
         pos = rank.index(tr[-2]['poi'])
         rank[0], rank[pos] = rank[pos], rank[0]
-        result = rank.index(tr[-1]['poi']) + 1
-        return result
+        #result = rank.index(tr[-1]['poi']) + 1
+        return rank
 
 
 class MarkovChainModel(object):
@@ -92,11 +92,12 @@ class MarkovChainModel(object):
         """
         self.model.learn_from([[c['poi'] for c in tr] for tr in trails])
 
-    def evaluate(self, tr):
+    def predict(self, tr, t):
         """ Evaluate the model by trails
         """
         history, refpoi = [c['poi'] for c in tr[:-1]], tr[-1]['poi']
-        return self.model.rank_next(history[-1]).index(refpoi) + 1
+        #return self.model.rank_next(history[-1]).index(refpoi) + 1
+        return self.model.rank_next(history[-1])
 
 
 class ColfilterModel(object):
@@ -111,6 +112,7 @@ class ColfilterModel(object):
         """
         super(ColfilterModel, self).__init__()
         self.namespace = namespace
+        self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
         self.timeparser = TimeParser()
         # Prepare model with kernel specification
         kparams = dict(config.VECTORIZOR_PARAM)
@@ -126,16 +128,22 @@ class ColfilterModel(object):
             self.vecs[idx, :, :] = self.vectorizor.process(tr)
         self.model.load_data(self.vecs)
 
-    def evaluate(self, tr):
+    def predict(self, tr, t):
         """ Predicting with colfilter model
         """
-        history = tr[:-1]
-        refpoi, t = tr[-1]['poi'], self.vectorizor.get_timeslot(tr[-1]['tick'])
-        vec = self.vectorizor.process(history)
+        t = self.vectorizor.get_timeslot(t)
+        vec = self.vectorizor.process(tr)
         est = self.model.estimates(vec, t)
-        rank = list(reversed(NP.argsort(est[:, t])))
-        result = rank.index(self.namespace.index(refpoi)) + 1      # rank should start from 1 because to MRR
-        return result
+        rank = sorted(self.namespace, key=lambda x: est[self.mapping(x), t], reverse=True)
+        return rank
+
+
+def run_test(model, trail):
+    """ running the testing stage
+    """
+    history, ref = trail[:-1], trail[-1]
+    rank = model.predict(history, ref['tick'])
+    return rank.index(ref['poi']) + 1
 
 
 def run_experiment(city, poicol, model, output):
@@ -151,17 +159,18 @@ def run_experiment(city, poicol, model, output):
         m = model(data_provider.get_namespace())
 
         LOGGER.info('Training...')
-        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id'])]
-        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 5]
+        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id']) if len(tr)]
+        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 2]
         m.train(train_tr)
 
         LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
         LOGGER.info('Trails: ' + str(len(test_tr)) + ' / ' + str(len(train_tr)))
-        LOGGER.info('Testing...')
+        LOGGER.info('Testing...[Output: %s]' % (output.name,))
 
         for trail in test_tr:
-            for trl in subtrails(trail, 3):
-                print >> output, m.evaluate(trl)
+            print >> output, run_test(m, trail)
+            #for trl in subtrails(trail, 2):
+                #print >> output, run_test(m, trail)
 
 
 def test_model():
@@ -189,6 +198,7 @@ def test_model():
 
     testset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in test]
 
+    #FIXME should be changed according to new interface
     m = ColfilterModel(['home', 'ewi', 'canteen'], "{'simnum': 24, 'similarity': CosineSimilarity(), 'aggregator': LinearCombination()}", "{'veclen': 100, 'interval': (0.,24*3600.), 'kernel': 'gaussian', 'params': (3600.,), 'isaccum': True}")
     LOGGER.info('Training...')
     m.train([tr for tr in itertrails(trainset, lambda x:x['trail_id'])])

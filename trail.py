@@ -57,29 +57,40 @@ def itertrails(seq, key=lambda x: x, diff=None):
     yield trail
 
 
-def idgen():
-    """ a genrator of unbounded integers
-    """
-    x = 0
-    while True:
-        yield x
-        x += 1
-
-_IDGEN = idgen()
-
-def subtrails(seq, minlen=2, key=lambda x: _IDGEN.next()):
+def iter_subtrails(seq, minlen=2, diffkey=None):
     """ Generating a trail set by truncating trail in to shorter lengths
 
         Arguments:
             seq -- a trail
             minlen -- a minimum length of genereated trails
-            key -- a function of differeciating the last two elements, making sure that key(subtrail[-1]) != key(subtrail[-2])
+            diffkey -- a function of differeciating the last two elements, making sure that key(subtrail[-1]) != key(subtrail[-2])
     """
     if minlen < 2:
         raise ValueError('The minimum length of a subtrail should be at least 2')
-    for l in range(minlen, len(seq) + 1):
-        if key(seq[l - 1]) != key(seq[l - 2]):
+
+    if diffkey is None:
+        for l in range(minlen, len(seq) + 1):
             yield seq[:l]
+    else:
+        for l in range(minlen, len(seq) + 1):
+            if diffkey(seq[l - 1]) != diffkey(seq[l - 2]):
+                yield seq[:l]
+
+
+def removed_duplication(seq, key=lambda x: x['poi']):
+    """ Remove consecutive checkins at the same place
+
+        Arguments:
+            seq -- a trail
+
+        Return:
+            a trail with every consecutive checkins from different places
+    """
+    noduptrail = list()
+    for c in seq:
+        if len(noduptrail) == 0 or key(noduptrail[-1]) != key(c):
+            noduptrail.append(c)
+    return noduptrail
 
 
 class TimeParser(object):
@@ -229,16 +240,16 @@ def testSubTrails():
 
     testinput = [1, 2, 2, 4]
     testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
-    for x, y in izip_longest(subtrails(testinput), testoutput):
+    for x, y in izip_longest(iter_subtrails(testinput), testoutput):
         print x
         assert x == y, '%s expected, but %s' % (y, x)
-    for x in subtrails([]):
+    for x in iter_subtrails([]):
         raise AssertionError('Should not see me as empty list has no sub_trails')
-    for x in subtrails([1]):
+    for x in iter_subtrails([1]):
         raise AssertionError('Should not see me as a list of length 1 has no sub_trails')
-    for x, y in izip_longest(subtrails([1, 2, 3, 4, 5], minlen=5), [[1, 2, 3, 4, 5]]):
+    for x, y in izip_longest(iter_subtrails([1, 2, 3, 4, 5], minlen=5), [[1, 2, 3, 4, 5]]):
         assert x == y, '%s expected, but %s' % (y, x)
-    for x in subtrails([1, 2, 3, 4, 5], minlen=6):
+    for x in iter_subtrails([1, 2, 3, 4, 5], minlen=6):
         raise AssertionError('Should not see me as minlen > len(list)')
 
 
@@ -247,14 +258,23 @@ def testSubTrailsTransition():
     """
     from itertools import izip_longest
 
-    testinput = [1, 2, 2, 3, 4]
+    testinput = [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]
     testoutput = [
-        [1, 2],
-        [1, 2, 2, 3],
-        [1, 2, 2, 3, 4]]
-    for x, y in izip_longest(subtrails(testinput, key=lambda x: x), testoutput):
+        [('a', 1), ('b', 2)],
+        [('a', 1), ('b', 2), ('c', 2), ('d', 3)],
+        [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]]
+    for x, y in izip_longest(iter_subtrails(testinput, diffkey=lambda x: x[1]), testoutput):
         print x
         assert x == y, '%s expected, but %s' % (y, x)
+
+
+def testRemoved_duplication():
+    """
+    """
+    testinput = [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]
+    testoutput = [('a', 1), ('b', 2), ('d', 3), ('e', 4)]
+    print removed_duplication(testinput, key=lambda x: x[1])
+    assert testoutput == removed_duplication(testinput, key=lambda x: x[1])
 
 
 def testBinaryVectorizor():

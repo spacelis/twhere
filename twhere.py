@@ -23,7 +23,7 @@ NP.seterr(all='warn', under='ignore')
 from model.colfilter import VectorDatabase
 from model.mm import MarkovModel
 from trail import itertrails
-from trail import subtrails
+from trail import iter_subtrails
 from trail import KernelVectorizor
 from trail import TimeParser
 from dataprov import TextData
@@ -46,6 +46,7 @@ class PredictingMajority(object):
             for c in tr:
                 self.dist[c['poi']] += 1
         self.majority = sorted(self.dist.iteritems(), key=lambda x: x[1], reverse=True)[0][0]
+        LOGGER.info('Majority Class: %s' % (self.majority,))
 
     def predict(self, tr, tick):
         """ predicting the last
@@ -72,7 +73,7 @@ class PredictingLast(object):
         """
         rank = list(self.namespace)
         shuffle(rank)
-        pos = rank.index(tr[-2]['poi'])
+        pos = rank.index(tr[-1]['poi'])
         rank[0], rank[pos] = rank[pos], rank[0]
         return rank
 
@@ -88,13 +89,15 @@ class MarkovChainModel(object):
     def train(self, trails):
         """ Train the model
         """
-        self.model.learn_from([[c['poi'] for c in tr] for tr in trails])
+        poitrails = list()
+        for tr in trails:
+            poitrails.append([c['poi'] for c in tr])
+        self.model.learn_from(poitrails)
 
     def predict(self, tr, tick):
         """ Evaluate the model by trails
         """
-        history, refpoi = [c['poi'] for c in tr[:-1]], tr[-1]['poi']
-        return self.model.rank_next(history[-1])
+        return self.model.rank_next(tr[-1]['poi'])
 
 
 class ColfilterModel(object):
@@ -151,6 +154,9 @@ def print_trail(trail):
     print zip(pois, ticks)
 
 
+FOLDS = 5
+
+
 def run_experiment(city, poicol, model, output):
     """ running the experiment
     """
@@ -159,12 +165,12 @@ def run_experiment(city, poicol, model, output):
     data = data_provider.get_data()
 
     LOGGER.info('Predicting %s', poicol)
-    for fold_id, (testset, trainset) in enumerate(folds(data, 10)):
-        LOGGER.info('Fold: %d/%d' % (fold_id + 1, 10))
+    for fold_id, (testset, trainset) in enumerate(folds(data, FOLDS)):
+        LOGGER.info('Fold: %d/%d' % (fold_id + 1, FOLDS))
         m = model(data_provider.get_namespace())
 
         LOGGER.info('Training...')
-        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id']) if len(tr)]
+        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id'])]
         test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id']) if len(tr) > 5]
         m.train(train_tr)
 
@@ -174,9 +180,8 @@ def run_experiment(city, poicol, model, output):
 
         test_cnt = 0
         for trail in test_tr:
-            #for trl in subtrails(trail, len(trail)): # only run on entire trail
-            for trl in subtrails(trail, minlen=5):  # only run on entire trail
-                print >> output, run_test(m, trail)
+            for subtrl in iter_subtrails(trail, minlen=len(trail), diffkey=lambda x: x['poi']):
+                print >> output, run_test(m, subtrl)
                 test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))
 

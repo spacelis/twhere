@@ -14,6 +14,7 @@ import sys
 import logging
 logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
+import multiprocessing
 from twhere import run_experiment, PredictingMajority, PredictingLast, MarkovChainModel, ColfilterModel
 import os
 from config import VECTORIZOR_PARAM, VECTORDB_PARAM
@@ -27,6 +28,23 @@ def coreloop(poicol, model, resdir, name):
         run_experiment(city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'a'))
 
 
+def call_experiment(args):
+    """ one parameter interface for run_experiment
+    """
+    run_experiment(*args)
+
+
+def coreloop_parallel(poicol, model, resdir, name):
+    """ coreloop_parallel is looping within the four cities
+    """
+    paralist = list()
+    for city, city_id in zip(['NY', 'CH', 'LA', 'SF'],
+                             ['27485069891a7938', '1d9a5370a355ab0c', '3b77caf94bfc81fe', '5a110d312052166f']):
+        paralist.append((city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'a')))
+    pool = multiprocessing.Pool(4)
+    pool.map(call_experiment, paralist)
+
+
 def experimentColfilter(poicol, resdir):
     """docstring for experimentColfilter
     """
@@ -35,25 +53,25 @@ def experimentColfilter(poicol, resdir):
         VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
             VECTORIZOR_PARAM['params'] = (sigma, )
-            coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
+            coreloop_parallel(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
 
 
 def experimentMarkovModel(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop(poicol, MarkovChainModel, resdir, 'mm')
+    coreloop_parallel(poicol, MarkovChainModel, resdir, 'mm')
 
 
 def experimentPredictingMajority(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop(poicol, PredictingMajority, resdir, 'pm')
+    coreloop_parallel(poicol, PredictingMajority, resdir, 'pm')
 
 
 def experimentPredictingLast(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop(poicol, PredictingLast, resdir, 'pl')
+    coreloop_parallel(poicol, PredictingLast, resdir, 'pl')
 
 
 if __name__ == '__main__':
@@ -67,9 +85,9 @@ if __name__ == '__main__':
     resdir = sys.argv[1]
     if not os.path.isdir(resdir):
         os.mkdir(resdir)
-    #experimentColfilter('category', resdir)
     experimentPredictingLast('category', resdir)
     experimentMarkovModel('category', resdir)
     experimentPredictingMajority('category', resdir)
+    experimentColfilter('category', resdir)
     #import profile
     #profile.run('experiment()')

@@ -68,8 +68,8 @@ if __name__ == '__main__':
     if not os.path.isdir(resdir):
         os.mkdir(resdir)
     #experimentColfilter('category', resdir)
+    experimentPredictingLast('category', resdir)
     experimentMarkovModel('category', resdir)
     experimentPredictingMajority('category', resdir)
-    experimentPredictingLast('category', resdir)
     #import profile
     #profile.run('experiment()')

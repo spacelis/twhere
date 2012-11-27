@@ -25,7 +25,7 @@ def coreloop(poicol, model, resdir, name):
     """
     for city, city_id in zip(['NY', 'CH', 'LA', 'SF'],
                              ['27485069891a7938', '1d9a5370a355ab0c', '3b77caf94bfc81fe', '5a110d312052166f']):
-        run_experiment(city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'a'))
+        run_experiment(city_id, poicol, model, os.path.join(resdir, '%s_%s.res' % (city, name)))
 
 
 def call_experiment(args):
@@ -40,7 +40,7 @@ def coreloop_parallel(poicol, model, resdir, name):
     paralist = list()
     for city, city_id in zip(['NY', 'CH', 'LA', 'SF'],
                              ['27485069891a7938', '1d9a5370a355ab0c', '3b77caf94bfc81fe', '5a110d312052166f']):
-        paralist.append((city_id, poicol, model, open(os.path.join(resdir, '%s_%s.res' % (city, name)), 'a')))
+        paralist.append((city_id, poicol, model, os.path.join(resdir, '%s_%s.res' % (city, name))))
     pool = multiprocessing.Pool(4)
     pool.map(call_experiment, paralist)
 

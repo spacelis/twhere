@@ -1,8 +1,0 @@
-#!/bin/bash
-# New York, Chicago, Los Angeles, San Francisco
-for city in "NY" "CH" "LA" "SF"
-do
-	ls $1/$city*.res | xargs -n1 basename
-	paste $1/$city*.res | ./ppython -m evaluate.mrr
-done
-

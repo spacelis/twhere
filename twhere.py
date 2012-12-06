@@ -154,7 +154,7 @@ def print_trail(trail):
     print zip(pois, ticks)
 
 
-FOLDS = 5
+FOLDS = 10
 
 
 def run_experiment(city, poicol, model, fname):

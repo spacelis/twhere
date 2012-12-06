@@ -20,6 +20,9 @@ import os
 from config import VECTORIZOR_PARAM, VECTORDB_PARAM
 
 
+# -------------------------------------------------
+# The core loop
+# -------------------------------------------------
 def coreloop(poicol, model, resdir, name):
     """ coreloop is looping within the four cities
     """
@@ -28,6 +31,10 @@ def coreloop(poicol, model, resdir, name):
         run_experiment(city_id, poicol, model, os.path.join(resdir, '%s_%s.res' % (city, name)))
 
 
+# -------------------------------------------------
+# Parallelism of coreloop
+#
+# Do not work on servers
 def call_experiment(args):
     """ one parameter interface for run_experiment
     """
@@ -45,6 +52,9 @@ def coreloop_parallel(poicol, model, resdir, name):
     pool.map(call_experiment, paralist)
 
 
+# -------------------------------------------------
+# EPERIMENTS
+#
 def experimentColfilter(poicol, resdir):
     """docstring for experimentColfilter
     """

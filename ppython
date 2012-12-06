@@ -1,2 +1,0 @@
-#!/bin/bash
-env PYTHONPATH=$PYTHONPATH:../model:../collective python $*

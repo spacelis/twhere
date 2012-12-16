@@ -4,11 +4,12 @@
 File: runtest.py
 Author: SpaceLis
 Changes:
+    0.0.2 remove parallel as not supported on servers
     0.0.1 The first version
 Description:
     running the experiments
 """
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 import sys
 import logging
@@ -17,7 +18,8 @@ LOGGER = logging.getLogger(__name__)
 import multiprocessing
 from twhere import run_experiment, PredictingMajority, PredictingLast, MarkovChainModel, ColfilterModel
 import os
-from config import VECTORIZOR_PARAM, VECTORDB_PARAM
+from config import VECTORIZOR_PARAM, VECTORDB_PARAM, HISTDAMP_PARAM, reset_config
+from model.colfilter import CosineSimilarity, HistoryDamper
 
 
 # -------------------------------------------------
@@ -58,30 +60,46 @@ def coreloop_parallel(poicol, model, resdir, name):
 def experimentColfilter(poicol, resdir):
     """docstring for experimentColfilter
     """
+    reset_config()
     sigmahours = [4., 2., 1., 0.5, 0.25]
     for simnum in [100, 50, 20, 10, 5]:
         VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
             VECTORIZOR_PARAM['params'] = (sigma, )
-            coreloop_parallel(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
+            coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
+
+
+def experimentColfilterHistoryDiscounting(poicol, resdir):
+    """docstring for experimentColfilterHistoryDiscounting
+    """
+    reset_config()
+    sigmahours = [4., 1., 0.25]
+    for simnum in [100, 20, 5]:
+        VECTORDB_PARAM['simnum'] = simnum
+        for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
+            for l in [1 / 14400., 1 / 7200., 1 / 3600., 1 / 1800., 1 / 900.]:
+                HISTDAMP_PARAM['params'] = {'l': l, }
+                VECTORDB_PARAM['similarity'] = CosineSimilarity([HistoryDamper(**HISTDAMP_PARAM), ])
+                VECTORIZOR_PARAM['params'] = (sigma, )
+                coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
 
 
 def experimentMarkovModel(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop_parallel(poicol, MarkovChainModel, resdir, 'mm')
+    coreloop(poicol, MarkovChainModel, resdir, 'mm')
 
 
 def experimentPredictingMajority(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop_parallel(poicol, PredictingMajority, resdir, 'pm')
+    coreloop(poicol, PredictingMajority, resdir, 'pm')
 
 
 def experimentPredictingLast(poicol, resdir):
     """docstring for experimentColfilter
     """
-    coreloop_parallel(poicol, PredictingLast, resdir, 'pl')
+    coreloop(poicol, PredictingLast, resdir, 'pl')
 
 
 if __name__ == '__main__':
@@ -92,12 +110,21 @@ if __name__ == '__main__':
     except:
         LOGGER.warn('Failed set resource limits.')
 
+    if len(sys.argv) < 2:
+        LOGGER.fatal('No folder provided for results')
+        print >> sys.stderr, 'Usage: runtest.py <dir>'
+        sys.exit(-1)
     resdir = sys.argv[1]
     if not os.path.isdir(resdir):
         os.mkdir(resdir)
-    experimentPredictingLast('category', resdir)
-    experimentMarkovModel('category', resdir)
-    experimentPredictingMajority('category', resdir)
+
+    # -------------------------------------------------
+    # Do NOT run experiment at one go, the parameters would confuse
+    # -------------------------------------------------
+
+    #experimentPredictingLast('category', resdir)
+    #experimentMarkovModel('category', resdir)
+    #experimentPredictingMajority('category', resdir)
     experimentColfilter('category', resdir)
     #import profile
     #profile.run('experiment()')

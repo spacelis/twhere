@@ -20,21 +20,36 @@ from model.colfilter import LinearCombination
 from model.colfilter import gaussian_pdf
 from model.colfilter import exponent_pdf
 
-HISTDAMP_PARAM = {"veclen": 100,
+HISTDAMP_PARAM_DEFAULT = {"veclen": 100,
                   "interval": (0., 24 * 3600.),
                   "damp_func": exponent_pdf,
                   "params": {'l': 1 / 3600.}}
 
-VECTORDB_PARAM = {"simnum": 20,
-                  "similarity": CosineSimilarity([HistoryDamper(**HISTDAMP_PARAM),]),
+VECTORDB_PARAM_DEFAULT = {"simnum": 20,
+                  "similarity": CosineSimilarity([]),
                   "aggregator": LinearCombination()}
 
-VECTORIZOR_PARAM = {"veclen": 100,
+VECTORIZOR_PARAM_DEFAULT = {"veclen": 100,
                     "interval": (0., 24 * 3600.),
                     "kernel": gaussian_pdf,
                     "params": (3600.,),
                     "isaccum": False,
                     "normalized": False}
+
+HISTDAMP_PARAM = dict(HISTDAMP_PARAM_DEFAULT)
+
+VECTORDB_PARAM = dict(VECTORDB_PARAM_DEFAULT)
+
+VECTORIZOR_PARAM = dict(VECTORIZOR_PARAM_DEFAULT)
+
+def reset_config():
+    """ reset the configuration
+    """
+    global HISTDAMP_PARAM, VECTORDB_PARAM, VECTORIZOR_PARAM
+    HISTDAMP_PARAM = dict(HISTDAMP_PARAM_DEFAULT)
+    VECTORDB_PARAM = dict(VECTORDB_PARAM_DEFAULT)
+    VECTORIZOR_PARAM = dict(VECTORIZOR_PARAM_DEFAULT)
+
 
 if __name__ == '__main__':
     raise Exception('Should run experiment.py')

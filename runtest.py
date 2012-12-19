@@ -77,11 +77,11 @@ def experimentColfilterHistoryDiscounting(poicol, resdir):
     for simnum in [100, 20, 5]:
         VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
-            for l in [1 / 14400., 1 / 7200., 1 / 3600., 1 / 1800., 1 / 900.]:
-                HISTDAMP_PARAM['params'] = {'l': l, }
+            for l in [14400, 7200, 3600, 1800, 900]:
+                HISTDAMP_PARAM['params'] = {'l': 1. / l, }
                 VECTORDB_PARAM['similarity'] = CosineSimilarity([HistoryDamper(**HISTDAMP_PARAM), ])
                 VECTORIZOR_PARAM['params'] = (sigma, )
-                coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
+                coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh_d%05d' % (simnum, sigmahour, l))
 
 
 def experimentMarkovModel(poicol, resdir):
@@ -125,6 +125,7 @@ if __name__ == '__main__':
     #experimentPredictingLast('category', resdir)
     #experimentMarkovModel('category', resdir)
     #experimentPredictingMajority('category', resdir)
-    experimentColfilter('category', resdir)
+    #experimentColfilter('category', resdir)
+    experimentColfilterHistoryDiscounting('category', resdir)
     #import profile
     #profile.run('experiment()')

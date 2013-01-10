@@ -42,6 +42,7 @@ class MySQLData(object):
                                     c.tr_id as trail_id,
                                     p.%s as poi,
                                     c.created_at as tick
+                                    c.pid as pid
                                 from %s as c
                                     left join checkins_place as p
                                     on c.pid = p.id
@@ -74,8 +75,8 @@ class TextData(object):
         self.namespace = list()
         with open(datapath) as fin:
             for line in fin:
-                tr_id, poi, tick = line.strip().split('\t')
-                tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S')}
+                tr_id, poi, tick, pid = line.strip().split('\t')
+                tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'), 'pid': pid}
                 self.data.append(tmp)
         with open(nspath) as fin:
             for line in fin:

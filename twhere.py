@@ -166,13 +166,15 @@ def run_experiment(city, poicol, model, fname):
     output = open(fname, 'w')
 
     LOGGER.info('Predicting %s', poicol)
-    for fold_id, (testset, trainset) in enumerate(folds(data, FOLDS)):
+    total_trails = list(itertrails(data, lambda x: x['trail_id']))
+    LOGGER.info('Trails in given dataset: %s', len(total_trails))
+    for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, FOLDS)):
         LOGGER.info('Fold: %d/%d' % (fold_id + 1, FOLDS))
-        m = model(data_provider.get_namespace())
 
         LOGGER.info('Training...')
-        train_tr = [tr for tr in itertrails(trainset, lambda x:x['trail_id'])]
-        test_tr = [tr for tr in itertrails(testset, lambda x:x['trail_id'])]
+        m = model(data_provider.get_namespace())
+        train_tr = list(train_tr)
+        test_tr = list(test_tr)
         m.train(train_tr)
 
         LOGGER.info('Checkins: %d / %d' % (sum(map(len, test_tr)), sum(map(len, train_tr))))
@@ -181,7 +183,7 @@ def run_experiment(city, poicol, model, fname):
 
         test_cnt = 0
         for trail in test_tr:
-            for subtrl in iter_subtrails(trail, minlen=5, diffkey=lambda x: x['poi']):
+            for subtrl in iter_subtrails(trail, minlen=5, diffkey=lambda x: x['pid']):
                 print >> output, run_test(m, subtrl)
                 test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))

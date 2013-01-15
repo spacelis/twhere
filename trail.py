@@ -63,7 +63,8 @@ def iter_subtrails(seq, minlen=2, diffkey=None):
         Arguments:
             seq -- a trail
             minlen -- a minimum length of genereated trails
-            diffkey -- a function of differeciating the last two elements, making sure that key(subtrail[-1]) != key(subtrail[-2])
+            diffkey -- a function of differeciating the last two elements,
+                    making sure returned subtrails with key(subtrail[-1]) != key(subtrail[-2])
     """
     if minlen < 2:
         raise ValueError('The minimum length of a subtrail should be at least 2')

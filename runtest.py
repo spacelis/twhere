@@ -119,7 +119,7 @@ if __name__ == '__main__':
         os.mkdir(resdir)
 
     # -------------------------------------------------
-    # Do NOT run experiment at one go, the parameters would confuse
+    # Do NOT run experiments at one go, the parameters would confuse
     # -------------------------------------------------
 
     #experimentPredictingLast('category', resdir)

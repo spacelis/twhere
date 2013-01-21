@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 import multiprocessing
 from twhere import run_experiment, PredictingMajority, PredictingLast, MarkovChainModel, ColfilterModel
 import os
-from config import VECTORIZOR_PARAM, VECTORDB_PARAM, HISTDAMP_PARAM, reset_config
+import config
 from model.colfilter import CosineSimilarity, HistoryDamper
 
 
@@ -60,27 +60,27 @@ def coreloop_parallel(poicol, model, resdir, name):
 def experimentColfilter(poicol, resdir):
     """docstring for experimentColfilter
     """
-    reset_config()
+    config.reset_config()
     sigmahours = [4., 2., 1., 0.5, 0.25]
     for simnum in [100, 50, 20, 10, 5]:
-        VECTORDB_PARAM['simnum'] = simnum
+        config.VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
-            VECTORIZOR_PARAM['params'] = (sigma, )
+            config.VECTORIZOR_PARAM['params'] = (sigma, )
             coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
 
 
 def experimentColfilterHistoryDiscounting(poicol, resdir):
     """docstring for experimentColfilterHistoryDiscounting
     """
-    reset_config()
+    config.reset_config()
     sigmahours = [4., 1., 0.25]
     for simnum in [100, 20, 5]:
-        VECTORDB_PARAM['simnum'] = simnum
+        config.VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
             for l in [14400, 7200, 3600, 1800, 900]:
-                HISTDAMP_PARAM['params'] = {'l': 1. / l, }
-                VECTORDB_PARAM['similarity'] = CosineSimilarity([HistoryDamper(**HISTDAMP_PARAM), ])
-                VECTORIZOR_PARAM['params'] = (sigma, )
+                config.HISTDAMP_PARAM['params'] = {'l': 1. / l, }
+                config.VECTORDB_PARAM['similarity'] = CosineSimilarity([HistoryDamper(**config.HISTDAMP_PARAM), ])
+                config.VECTORIZOR_PARAM['params'] = (sigma, )
                 coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh_d%05d' % (simnum, sigmahour, l))
 
 

@@ -66,7 +66,7 @@ def experimentColfilter(poicol, resdir):
         config.VECTORDB_PARAM['simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
             config.VECTORIZOR_PARAM['params'] = (sigma, )
-            coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh' % (simnum, sigmahour))
+            coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%6.2gh' % (simnum, sigmahour))
 
 
 def experimentColfilterHistoryDiscounting(poicol, resdir):
@@ -81,7 +81,7 @@ def experimentColfilterHistoryDiscounting(poicol, resdir):
                 config.HISTDAMP_PARAM['params'] = {'l': 1. / l, }
                 config.VECTORDB_PARAM['similarity'] = CosineSimilarity([HistoryDamper(**config.HISTDAMP_PARAM), ])
                 config.VECTORIZOR_PARAM['params'] = (sigma, )
-                coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%.1gh_d%05d' % (simnum, sigmahour, l))
+                coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%6.2gh_d%05d' % (simnum, sigmahour, l))
 
 
 def experimentMarkovModel(poicol, resdir):

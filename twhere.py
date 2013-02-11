@@ -20,7 +20,7 @@ from random import shuffle
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
-from model.colfilter import VectorDatabase
+from model.colfilter import VectorDatabase, uniform_pdf
 from model.mm import MarkovModel
 from trail import itertrails
 from trail import iter_subtrails
@@ -28,6 +28,7 @@ from trail import KernelVectorizor
 from trail import TimeParser
 from dataprov import TextData
 from experiment.crossvalid import folds
+from collections import Counter
 import config
 
 
@@ -56,6 +57,36 @@ class PredictingMajority(object):
         pos = rank.index(self.majority)
         rank[0], rank[pos] = rank[pos], rank[0]
         return rank
+
+
+class PredictingTimeMajority(object):
+    """ Preducting the majority class
+    """
+    def __init__(self, namespace):
+        super(PredictingTimeMajority, self).__init__()
+        self.namespace = namespace
+        self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
+        self.timeparser = TimeParser()
+        # Prepare model with kernel specification
+        kparams = dict(config.VECTORIZOR_PARAM)
+        kparams["namespace"] = namespace
+        self.vectorizor = KernelVectorizor(**kparams)
+        self.dist = NP.zeros((len(namespace), config.VECTORIZOR_PARAM['veclen']))
+
+    def train(self, trails):
+        """ Calculate the distribution of visiting location type
+        """
+        for tr in trails:
+            for c in tr:
+                t = self.vectorizor.get_timeslot(c['tick'])
+                p = self.mapping(c['poi'])
+                self.dist[p, t] += 1
+        LOGGER.info('Majority Class: %s' % (self.dist,))
+
+    def predict(self, tr, tick):
+        """ predicting the last
+        """
+        return sorted(self.namespace, key=lambda x: self.dist[self.mapping(x), self.vectorizor.get_timeslot(tick)], reverse=True)
 
 
 class PredictingLast(object):
@@ -138,6 +169,51 @@ class ColfilterModel(object):
         return rank
 
 
+class ColfilterHistoryModel(object):
+    """ Using cofilter with vectorized trails but rank category by most visits in similar trails
+    """
+    def __init__(self, namespace):
+        """ Constructor
+
+            Arguments:
+                namespace -- the predicting classes
+                veclen -- the length of vectors
+        """
+        super(ColfilterHistoryModel, self).__init__()
+        self.namespace = namespace
+        self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
+        self.timeparser = TimeParser()
+        # Prepare model with kernel specification
+        kparams = dict(config.VECTORIZOR_PARAM)
+        kparams["namespace"] = namespace
+        self.vectorizor = KernelVectorizor(**kparams)
+        self.model = VectorDatabase(**config.VECTORDB_PARAM)
+
+    def train(self, trails):
+        """ Train the model
+        """
+        self.vecs = NP.zeros((len(trails), len(self.namespace), self.vectorizor.veclen), dtype=NP.float32)
+        self.recs = list()
+        for idx, tr in enumerate(trails):
+            self.vecs[idx, :, :] = self.vectorizor.process(tr)
+            self.recs.append(Counter([c['poi'] for c in tr]))
+        self.model.load_data(self.vecs)
+
+    def predict(self, tr, tick):
+        """ Predicting with colfilter model
+        """
+        t = self.vectorizor.get_timeslot(tick)
+        vec = self.vectorizor.process(tr)
+        sims = self.model.get_similarities(vec, t)
+        idces = NP.argsort(sims)[::-1]
+        dist = NP.zeros(len(self.namespace))
+        for idx in idces[:config.VECTORDB_PARAM['simnum']]:
+            for n, cnt in self.recs[idx].iteritems():
+                dist[self.mapping(n)] += cnt * sims[idx]
+        rank = sorted(self.namespace, key=lambda x: dist[self.mapping(x)], reverse=True)
+        return rank
+
+
 def run_test(model, trail):
     """ running the testing stage
     """
@@ -187,42 +263,6 @@ def run_experiment(city, poicol, model, fname):
                 print >> output, run_test(m, subtrl)
                 test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))
-
-
-def test_model():
-    """ Test the model
-    """
-    from datetime import datetime
-    from numpy.testing import assert_equal
-    column = ['trail_id', 'poi', 'tick', 'text']
-    train = [['1', 'home', datetime(2011, 1, 1, 6, 30), 'test'],
-            ['1', 'ewi', datetime(2011, 1, 1, 9, 30), 'test'],
-            ['1', 'canteen', datetime(2011, 1, 1, 12, 30), 'test'],
-            ['1', 'ewi', datetime(2011, 1, 1, 14, 30), 'test'],
-
-            ['2', 'ewi', datetime(2011, 1, 1, 11, 30), 'test'],
-            ['2', 'canteen', datetime(2011, 1, 1, 12, 30), 'test'],
-            ['2', 'ewi', datetime(2011, 1, 1, 14, 30), 'test'],
-            ['2', 'home', datetime(2011, 1, 1, 18, 30), 'test']]
-
-    trainset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in train]
-
-    test = [['3', 'home', datetime(2011, 1, 1, 6, 30), 'test'],
-            ['3', 'ewi', datetime(2011, 1, 1, 9, 30), 'test'],
-            ['3', 'canteen', datetime(2011, 1, 1, 12), 'test'],
-            ['3', 'ewi', datetime(2011, 1, 1, 14, 25), 'test']]
-
-    testset = [dict([(key, val) for key, val in zip(column, checkin)]) for checkin in test]
-
-    #FIXME should be changed according to new interface
-    m = ColfilterModel(['home', 'ewi', 'canteen'], "{'simnum': 24, 'similarity': CosineSimilarity(), 'aggregator': LinearCombination()}", "{'veclen': 100, 'interval': (0.,24*3600.), 'kernel': 'gaussian', 'params': (3600.,), 'isaccum': True}")
-    LOGGER.info('Training...')
-    m.train([tr for tr in itertrails(trainset, lambda x:x['trail_id'])])
-    LOGGER.info('Testing...')
-    for tr in itertrails(testset, lambda x: x['trail_id']):
-        e = m.evaluate(tr)
-        print e
-        assert_equal(e, 1)
 
 
 if __name__ == '__main__':

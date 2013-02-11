@@ -57,24 +57,31 @@ def itertrails(seq, key=lambda x: x, diff=None):
     yield trail
 
 
-def iter_subtrails(seq, minlen=2, diffkey=None):
+def iter_subtrails(seq, minlen=2, diffmode=None, diffkey=None):
     """ Generating a trail set by truncating trail in to shorter lengths
 
         Arguments:
             seq -- a trail
             minlen -- a minimum length of genereated trails
+            diffmode -- None: all subtrails,
+                        'last': subtrails with different last two according to diffkey
+                        'all': subtrails with the last different from the rest
             diffkey -- a function of differeciating the last two elements,
                     making sure returned subtrails with key(subtrail[-1]) != key(subtrail[-2])
     """
     if minlen < 2:
         raise ValueError('The minimum length of a subtrail should be at least 2')
 
-    if diffkey is None:
+    if diffmode is None:
         for l in range(minlen, len(seq) + 1):
             yield seq[:l]
-    else:
+    elif diffmode == 'last':
         for l in range(minlen, len(seq) + 1):
             if diffkey(seq[l - 1]) != diffkey(seq[l - 2]):
+                yield seq[:l]
+    elif diffmode == 'all':
+        for l in range(minlen, len(seq) + 1):
+            if diffkey(seq[l - 1]) not in [diffkey(c) for c in seq[:(l - 1)]]:
                 yield seq[:l]
 
 
@@ -254,7 +261,7 @@ def testSubTrails():
         raise AssertionError('Should not see me as minlen > len(list)')
 
 
-def testSubTrailsTransition():
+def testSubTrailsDiffLast():
     """
     """
     from itertools import izip_longest
@@ -264,7 +271,22 @@ def testSubTrailsTransition():
         [('a', 1), ('b', 2)],
         [('a', 1), ('b', 2), ('c', 2), ('d', 3)],
         [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]]
-    for x, y in izip_longest(iter_subtrails(testinput, diffkey=lambda x: x[1]), testoutput):
+    for x, y in izip_longest(iter_subtrails(testinput, diffmode='last', diffkey=lambda x: x[1]), testoutput):
+        print x
+        assert x == y, '%s expected, but %s' % (y, x)
+
+
+def testSubTrailsDiffAll():
+    """
+    """
+    from itertools import izip_longest
+
+    testinput = [('a', 1), ('b', 2), ('d', 3), ('c', 2), ('e', 4)]
+    testoutput = [
+        [('a', 1), ('b', 2)],
+        [('a', 1), ('b', 2), ('d', 3)],
+        [('a', 1), ('b', 2), ('d', 3), ('c', 2), ('e', 4)]]
+    for x, y in izip_longest(iter_subtrails(testinput, diffmode='all', diffkey=lambda x: x[1]), testoutput):
         print x
         assert x == y, '%s expected, but %s' % (y, x)
 

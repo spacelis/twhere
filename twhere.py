@@ -20,7 +20,7 @@ from random import shuffle
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
-from model.colfilter import VectorDatabase, uniform_pdf
+from model.colfilter import VectorDatabase
 from model.mm import MarkovModel
 from trail import itertrails
 from trail import iter_subtrails
@@ -259,7 +259,7 @@ def run_experiment(city, poicol, model, fname):
 
         test_cnt = 0
         for trail in test_tr:
-            for subtrl in iter_subtrails(trail, minlen=5, diffkey=lambda x: x['pid']):
+            for subtrl in iter_subtrails(trail, minlen=5, diffmode='last', diffkey=lambda x: x['pid']):
                 print >> output, run_test(m, subtrl)
                 test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))

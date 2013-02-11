@@ -28,13 +28,16 @@ def eval_dir(path):
             dirname -- the path to the diretory containing evaluation results
     """
     files = sorted(os.listdir(path))
-    names = [n.rsplit('.', 1)[0][3:] for n in files if n.startswith('NY')]
+    names = sorted(set([n.rsplit('.', 1)[0][3:] for n in files if n.endswith('.res')]))
     print ' ' * 11, '      '.join(PREFICES)
     for n in names:
         scores = list()
         for prefix in PREFICES:
-            eva = NP.array([int(v) for v in open(os.path.join(path, '%s_%s.res' % (prefix, n)))], dtype=NP.float64)
-            scores.append(mrr(eva))
+            try:
+                eva = NP.array([int(v) for v in open(os.path.join(path, '%s_%s.res' % (prefix, n)))], dtype=NP.float64)
+                scores.append(mrr(eva))
+            except:
+                scores.append(-1.)
         print '%10s' % (n,), '  '.join([('%.4f' % v) for v in scores])
 
 

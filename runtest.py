@@ -164,8 +164,8 @@ if __name__ == '__main__':
     #experimentMarkovModel('category', resdir)
     #experimentPredictingMajority('category', resdir)
     #experimentPredictingTimeMajority('category', resdir)
-    #experimentColfilter('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
-    experimentColfilterHistory('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
+    experimentColfilter('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
+    #experimentColfilterHistory('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
     #experimentColfilterHistoryDiscounting('category', resdir)
     #import profile
     #profile.run('experiment()')

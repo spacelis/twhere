@@ -26,6 +26,7 @@ from trail import itertrails
 from trail import iter_subtrails
 from trail import KernelVectorizor
 from trail import TimeParser
+from trail import uniformed_trail_set
 from dataprov import TextData
 from experiment.crossvalid import folds
 from collections import Counter
@@ -258,11 +259,16 @@ def run_experiment(city, poicol, model, fname):
         LOGGER.info('Testing...[Output: %s]' % (output.name,))
 
         test_cnt = 0
+        cateset = Counter()
+        expanded_test_tr = list()
         for trail in test_tr:
-            for subtrl in iter_subtrails(trail, minlen=5, diffmode='last', diffkey=lambda x: x['pid']):
-                print >> output, run_test(m, subtrl)
-                test_cnt += 1
+            expanded_test_tr.extend(iter_subtrails(trail, minlen=5, diffmode='last', diffkey=lambda x: x['pid']))
+        for subtrl in uniformed_trail_set(expanded_test_tr):
+            cateset.update([c['poi'] for c in subtrl])
+            print >> output, run_test(m, subtrl)
+            test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))
+        LOGGER.info('# of categories: %d' % (len(cateset),))
 
 
 if __name__ == '__main__':

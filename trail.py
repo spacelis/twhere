@@ -85,7 +85,22 @@ def iter_subtrails(seq, minlen=2, diffmode=None, diffkey=None):
                 yield seq[:l]
 
 
-def removed_duplication(seq, key=lambda x: x['poi']):
+def uniformed_trail_set(trl_set, key=lambda tr: tr[-1]['poi'], maxnum=1):
+    """ Generating a trail set by prune the biased distribution of reference classes
+
+        Arguments:
+            trl_set: a set of trails
+
+        Return:
+            a set of trails that the last check-ins are of equal probability of being each class.
+    """
+    for poi, trls in itertools.groupby(sorted(list(trl_set), key=key), key=key):
+        trls = list(trls)
+        for _ in range(maxnum):
+            yield trls[NP.random.randint(len(trls))]
+
+
+def removed_duplication(seq, key=lambda ck: ck['poi']):
     """ Remove consecutive checkins at the same place
 
         Arguments:
@@ -223,123 +238,3 @@ class KernelVectorizor(Vectorizor):
         """ Return the timeslot
         """
         return self.axis.searchsorted(self.timeparser.parse(t)) - 1
-
-
-# -------------------------------------------------
-# TESTS
-#
-def testIterTrails():
-    """ Test itertrails
-    """
-    testinput = [[1, 2], [1, 4], [2, 3], [2, 3], [2, 7], [3, 7], [3, 7], [3, 3]]
-    testoutput = [
-        [[1, 2], [1, 4]],
-        [[2, 3], [2, 3], [2, 7]],
-        [[3, 7], [3, 7], [3, 3]]]
-    from itertools import izip_longest
-    for x, y in izip_longest(itertrails(testinput, lambda x: x[0]), testoutput):
-        assert x == y, '%s expected, but %s' % (y, x)
-
-
-def testSubTrails():
-    """
-    """
-    from itertools import izip_longest
-
-    testinput = [1, 2, 2, 4]
-    testoutput = [[1, 2], [1, 2, 2], [1, 2, 2, 4]]
-    for x, y in izip_longest(iter_subtrails(testinput), testoutput):
-        print x
-        assert x == y, '%s expected, but %s' % (y, x)
-    for x in iter_subtrails([]):
-        raise AssertionError('Should not see me as empty list has no sub_trails')
-    for x in iter_subtrails([1]):
-        raise AssertionError('Should not see me as a list of length 1 has no sub_trails')
-    for x, y in izip_longest(iter_subtrails([1, 2, 3, 4, 5], minlen=5), [[1, 2, 3, 4, 5]]):
-        assert x == y, '%s expected, but %s' % (y, x)
-    for x in iter_subtrails([1, 2, 3, 4, 5], minlen=6):
-        raise AssertionError('Should not see me as minlen > len(list)')
-
-
-def testSubTrailsDiffLast():
-    """
-    """
-    from itertools import izip_longest
-
-    testinput = [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]
-    testoutput = [
-        [('a', 1), ('b', 2)],
-        [('a', 1), ('b', 2), ('c', 2), ('d', 3)],
-        [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]]
-    for x, y in izip_longest(iter_subtrails(testinput, diffmode='last', diffkey=lambda x: x[1]), testoutput):
-        print x
-        assert x == y, '%s expected, but %s' % (y, x)
-
-
-def testSubTrailsDiffAll():
-    """
-    """
-    from itertools import izip_longest
-
-    testinput = [('a', 1), ('b', 2), ('d', 3), ('c', 2), ('e', 4)]
-    testoutput = [
-        [('a', 1), ('b', 2)],
-        [('a', 1), ('b', 2), ('d', 3)],
-        [('a', 1), ('b', 2), ('d', 3), ('c', 2), ('e', 4)]]
-    for x, y in izip_longest(iter_subtrails(testinput, diffmode='all', diffkey=lambda x: x[1]), testoutput):
-        print x
-        assert x == y, '%s expected, but %s' % (y, x)
-
-
-def testRemoved_duplication():
-    """
-    """
-    testinput = [('a', 1), ('b', 2), ('c', 2), ('d', 3), ('e', 4)]
-    testoutput = [('a', 1), ('b', 2), ('d', 3), ('e', 4)]
-    print removed_duplication(testinput, key=lambda x: x[1])
-    assert testoutput == removed_duplication(testinput, key=lambda x: x[1])
-
-
-def testBinaryVectorizor():
-    """
-    """
-    from datetime import datetime
-
-    bvz = BinaryVectorizor(['a', 'b', 'c'], 24, isaccum=False)
-    data = [
-        "a 2010-12-13 04:07:12",
-        "b 2010-12-13 04:20:39",
-        "c 2010-12-13 06:09:51"]
-    tr = [{"poi": x, "tick": datetime.strptime(y, '%Y-%m-%d %H:%M:%S')} for x, y in [s.split(' ', 1) for s in data]]
-    assert_equal(bvz.process(tr),
-                 [[0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.],
-                  [0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.],
-                  [0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0.,  0.]])
-
-
-def testKernelVectorizor():
-    """
-    """
-    kvz = KernelVectorizor(['a', 'b', 'c'], 24)
-    data = [
-        "a 2010-12-13 04:07:12",
-        "b 2010-12-13 04:20:39",
-        "c 2010-12-13 06:09:51",
-    ]
-    tr = [{"poi": x, "tick": datetime.strptime(y, '%Y-%m-%d %H:%M:%S')} for x, y in [s.split(' ', 1) for s in data]]
-    v = kvz.process(tr)
-    PLT.plot(range(24), v[0])
-    PLT.plot(range(24), v[1])
-    PLT.plot(range(24), v[2])
-    PLT.show()
-    assert_equal(kvz.get_timeslot(datetime.strptime('2010-12-13 23:17:23', '%Y-%m-%d %H:%M:%S')), 23)
-
-
-if __name__ == '__main__':
-    names = dict(globals())
-    from matplotlib import pyplot as PLT
-    from numpy.testing import assert_equal
-    testfuncnames = [name for name in names if name.startswith('test')]
-    for funcname in testfuncnames:
-        print 'Running...', funcname
-        globals()[funcname]()

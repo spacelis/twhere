@@ -16,10 +16,10 @@ import logging
 logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 import multiprocessing
-from twhere import run_experiment, PredictingMajority, PredictingTimeMajority, PredictingLast, MarkovChainModel, ColfilterModel, ColfilterHistoryModel
+from twhere import run_experiment, PredictingMajority, PredictingTimeMajority, PredictingLast, MarkovChainModel, ColfilterModel, ColfilterHistoryModel, generate_testing_reference
 import os
 import config
-from model.colfilter import CosineSimilarity, HistoryDamper
+from model.colfilter import CosineSimilarity, HistoryDamper, uniform_pdf
 
 
 # -------------------------------------------------
@@ -78,10 +78,16 @@ def experimentColfilter(poicol, resdir, city_idx=None):
         config.VECTORIZOR_PARAM['normalized'] = True
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
             config.VECTORIZOR_PARAM['params'] = (sigma, )
+            config.VECTORIZOR_PARAM['kernel'] = uniform_pdf
             if city_idx is None:
                 coreloop(poicol, ColfilterModel, resdir, 'n%03d_s%6.2gh' % (simnum, sigmahour))
             else:
                 core(poicol, ColfilterModel, resdir, 'n%03d_s%6.2gh' % (simnum, sigmahour), city_idx)
+
+
+def generate_refs(poicol, resdir, city_idx=None):
+    for city_idx in range(len(CITY)):
+        generate_testing_reference(CITY[city_idx][1], poicol, None, os.path.join(resdir, '%s.res' % (CITY[city_idx][0], )))
 
 
 def experimentColfilterHistory(poicol, resdir, city_idx=None):
@@ -164,7 +170,8 @@ if __name__ == '__main__':
     #experimentMarkovModel('category', resdir)
     #experimentPredictingMajority('category', resdir)
     #experimentPredictingTimeMajority('category', resdir)
-    experimentColfilter('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
+    #experimentColfilter('base', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
+    generate_refs('base', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
     #experimentColfilterHistory('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
     #experimentColfilterHistoryDiscounting('category', resdir)
     #import profile

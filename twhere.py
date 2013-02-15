@@ -26,7 +26,7 @@ from trail import itertrails
 from trail import iter_subtrails
 from trail import KernelVectorizor
 from trail import TimeParser
-from trail import uniformed_trail_set
+#from trail import uniformed_trail_set
 from dataprov import TextData
 from experiment.crossvalid import folds
 from collections import Counter
@@ -263,13 +263,40 @@ def run_experiment(city, poicol, model, fname):
         expanded_test_tr = list()
         for trail in test_tr:
             expanded_test_tr.extend(iter_subtrails(trail, minlen=5, diffmode='last', diffkey=lambda x: x['pid']))
-        for subtrl in uniformed_trail_set(expanded_test_tr):
+        #for subtrl in uniformed_trail_set(expanded_test_tr):
+        for subtrl in expanded_test_tr:
             cateset.update([c['poi'] for c in subtrl])
             print >> output, run_test(m, subtrl)
             test_cnt += 1
         LOGGER.info('Tested trails: %d' % (test_cnt,))
         LOGGER.info('# of categories: %d' % (len(cateset),))
 
+
+def generate_testing_reference(city, poicol, model, fname):
+    """ running the experiment
+    """
+    from datetime import timedelta
+    delta = timedelta(hours=6)
+    LOGGER.info('Reading data from %s', city)
+    data_provider = TextData(city, poicol)
+    data = data_provider.get_data()
+    output = open(fname, 'w')
+
+    LOGGER.info('Generation tested check-ins %s', poicol)
+    total_trails = list(itertrails(data, lambda x: x['trail_id']))
+    LOGGER.info('Trails in given dataset: %s', len(total_trails))
+    for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, FOLDS)):
+        LOGGER.info('Fold: %d/%d' % (fold_id + 1, FOLDS))
+
+        test_tr = list(test_tr)
+
+        LOGGER.info('Checkins: %d' % (sum(map(len, test_tr))))
+        LOGGER.info('Trails: ' + str(len(test_tr)))
+
+        for trail in test_tr:
+            for tr in iter_subtrails(trail, minlen=5, diffmode='last', diffkey=lambda x: x['pid']):
+                history, ref = tr[:-1], tr[-1]
+                print >> output, ref['poi'] + '\t' + str(ref['tick'] + delta)
 
 if __name__ == '__main__':
     raise Exception('Should run experiment.py instead of this one')

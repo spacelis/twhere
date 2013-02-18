@@ -15,219 +15,224 @@ logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', l
 LOGGER = logging.getLogger(__name__)
 
 import numpy as NP
+from numpy.lib.stride_tricks import as_strided
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 import itertools
 from model.colfilter import kernel_smooth
 from model.colfilter import gaussian_pdf
 
 
-TRAILSECONDS = 24 * 3600
 EPSILON = 1e-10
 
 
-#FIXME diff parameter should be tested
-def itertrails(seq, key=lambda x: x, diff=None):
+def iter_checkin_trails(seq, key=lambda x: x['trail_id']):
     """ A generating function for trails
 
         Arguments:
-            seq -- a trail
-            key -- a key function used for segmenting a trail into several trails, working like itertools.groupby()
-            diff -- a function making each generated trail has no consecutive checkins at the same place.
+            seq -- a sequence of check-ins interpreted as a dict() containing at least a key of 'trail_id'
     """
-    k = None
-    trail = None
-    u = None
-    for s in seq:
-        if k == key(s):
-            if diff and u == diff(s):
-                continue
-            trail.append(s)
-        elif k:
-            yield trail
-            trail = list()
-            trail.append(s)
-            k = key(s)
-        else:
-            trail = list()
-            trail.append(s)
-            k = key(s)
-        if diff:
-            u = diff(s)
-    yield trail
+    return itertools.groupby(seq, key=key)
 
 
-def iter_subtrails(seq, minlen=2, diffmode=None, diffkey=None):
-    """ Generating a trail set by truncating trail in to shorter lengths
+# -------------------------------------------------
+# Trail filters
+#
 
-        Arguments:
-            seq -- a trail
-            minlen -- a minimum length of genereated trails
-            diffmode -- None: all subtrails,
-                        'last': subtrails with different last two according to diffkey
-                        'all': subtrails with the last different from the rest
-            diffkey -- a function of differeciating the last two elements,
-                    making sure returned subtrails with key(subtrail[-1]) != key(subtrail[-2])
+def length_limits_filter(trails, minlen=2, maxlen=10000):
+    """ Filter out shorter trails
     """
-    if minlen < 2:
-        raise ValueError('The minimum length of a subtrail should be at least 2')
-
-    if diffmode is None:
-        for l in range(minlen, len(seq) + 1):
-            yield seq[:l]
-    elif diffmode == 'last':
-        for l in range(minlen, len(seq) + 1):
-            if diffkey(seq[l - 1]) != diffkey(seq[l - 2]):
-                yield seq[:l]
-    elif diffmode == 'all':
-        for l in range(minlen, len(seq) + 1):
-            if diffkey(seq[l - 1]) not in [diffkey(c) for c in seq[:(l - 1)]]:
-                yield seq[:l]
+    return itertools.ifilter(lambda x: minlen < x < maxlen, trails)
 
 
-def uniformed_trail_set(trl_set, key=lambda tr: tr[-1]['poi'], maxnum=1):
-    """ Generating a trail set by prune the biased distribution of reference classes
-
-        Arguments:
-            trl_set: a set of trails
-
-        Return:
-            a set of trails that the last check-ins are of equal probability of being each class.
+def diff_last_filter(trails, key=lambda x: x['pid']):
+    """ Filter out trails with last two key different
     """
-    for poi, trls in itertools.groupby(sorted(list(trl_set), key=key), key=key):
+    return itertools.ifilter(lambda x: key(x[-1]) != key(x[-2]), trails)
+
+
+def diff_all_filter(trails, key=lambda x: x['pid']):
+    """ Filter out trails with last key appeared before
+    """
+    return itertools.ifilter(lambda x: key(x[-1]) not in set([key(c) for c in x]), trails)
+
+
+def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
+    """ Filter trails so that each 'poi' has exactly one trail ends with it
+    """
+    for poi, trls in itertools.groupby(sorted(list(trails), key=key), key=key):
         trls = list(trls)
-        for _ in range(maxnum):
+        for _ in range(maximum):
             yield trls[NP.random.randint(len(trls))]
 
 
-def removed_duplication(seq, key=lambda ck: ck['poi']):
-    """ Remove consecutive checkins at the same place
+# -------------------------------------------------
+# Trail segmentation
+#
 
-        Arguments:
-            seq -- a trail
-
-        Return:
-            a trail with every consecutive checkins from different places
+class TrailVectorSegmentSet(object):
+    """ Cutting vectorized trails in to segments along time dimension according to given reference point.
     """
-    noduptrail = list()
-    for c in seq:
-        if len(noduptrail) == 0 or key(noduptrail[-1]) != key(c):
-            noduptrail.append(c)
-    return noduptrail
+    def __init__(self, data, ref, seglen=100):
+        """ Create a view as a vector of trail segments.
+        Each element is a matrix of time [(of the given seglen) x user x poi].
+        For example, as_segments([A, B, C, D, E], 3) == [[A, B, C], [B, C, D], [C, D, E])
 
-
-class TimeParser(object):
-    """ Parse time in the string/datetime object into seconds from midnight (from start)
-    """
-    def __init__(self, start=0, isstr=False):
-        super(TimeParser, self).__init__()
-        if isinstance(start, int):
-            self.start = start
-        elif isinstance(start, str):
-            self.start = TimeParser.timedelta(start)
-        else:
-            raise ValueError('Malformed value for parameter: start')
-        if isstr:
-            self.parse = self.str2seconds
-        else:
-            self.parse = self.datetime2seconds
-
-    def str2seconds(self, timestr):
-        """ parse the timestr into seconds
+            Arguments:
+                data -- a 3D NP.array() time x user x poi
+                ref -- a timeslot used as reference
+                seglen -- the length of segments in timeslots
         """
-        t = datetime.strptime(timestr, '%Y-%m-%d %H:%M:%S')
-        return (3600 * t.hour + 60 * t.minute + t.second - self.start) % TRAILSECONDS
+        assert len(data.shape) == 3, 'Trails must be stored as [time] * [user] * [poi]'
+        super(TrailVectorSegmentSet, self).__init__()
+        self.length, self.user_num, self.poi_num = data.shape
+        self.seglen = seglen
+        self.ref = ref
 
-    def datetime2seconds(self, tick):
-        """ parse datetime object into seconds
-        """
-        return (3600 * tick.hour + 60 * tick.minute + tick.second - self.start) % TRAILSECONDS
+        self.frame_num = self.length - self.seglen + 1  # Frames are sliding windows of segment length
+        self.snapshot_bytesize = self.user_num * self.poi_num * data.itemsize
+        self.segsets = as_strided(data,
+                                  shape=(self.frame_num, seglen, self.user_num, self.poi_num),
+                                  strides=(self.snapshot_bytesize, self.snapshot_bytesize, self.poi_num * data.itemsize, data.itemsize))
 
-    def timedelta(t):
-        """ Convert string format of delta time into seconds
+    def enumerate_segment_sets(self):
+        """ Enumerating segment sets according to reference point
         """
-        if not isinstance(t, str):
-            raise ValueError('Expected str() but: ' + str(type(t)))
-        if t[-1] == 'm':
-            return int(t[:-1]) * 60
-        elif t[-1] == 'h':
-            return int(t[:-1]) * 3600
+        for i in NP.arange((self.ref + 1) % self.seglen, self.ref, self.seglen):  # including the ref point as the last time point in a segment
+            yield i, self.segsets[i]
+
+    def enumerate_segments(self):
+        """ Enumerating segments
+        """
+        for t, segset in self.enumerate_segment_sets():
+            for u in range(self.user_num):
+                yield u, t, segset
 
 
 # -------------------------------------------------
 # Vetorizors
 #
+
+def str2datetime(s):
+    """ Parse a string into datetime
+    """
+    datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+
+
+def str2timedelta(s):
+    """ Convert string format of delta time into timedelta
+    """
+    if not isinstance(s, str):
+        raise ValueError('Expected str() but: ' + str(type(s)))
+    if s[-1] == 'm':
+        return timedelta(minutes=int(s[:-1]))
+    elif s[-1] == 'h':
+        return timedelta(hours=int(s[:-1]))
+
+
 class Vectorizor(object):
     """ Make trail into vectors
     """
-    def __init__(self, namespace, veclen=100, timeparser=TimeParser()):
+    def __init__(self,
+                 namespace,
+                 unit=timedelta(seconds=24 * 36),
+                 epoch=datetime(2010, 6, 1),
+                 eschatos=datetime(2011, 6, 1),
+                 timeparser=lambda x: x):
+
         super(Vectorizor, self).__init__()
-        self.namespace, self.veclen = namespace, veclen
-        self.unit = float(TRAILSECONDS) / veclen
+        self.namespace = namespace
+        self.unit = unit if isinstance(unit, timedelta) else str2timedelta(unit)
+        self.epoch = epoch
+        self.eschatos = eschatos
         self.timeparser = timeparser
 
-    def process(self, trail):
+        self.unit = unit.total_seconds()
+        self.veclen = (self.eschatos - self.epoch).total_seconds() / self.unit
+        self.timeparser = timeparser
+
+    def process(self, trail, target=None):
         raise NotImplemented
 
-    def get_timeslot(self, t):
-        raise NotImplemented
+    def get_timeslot(self, tick):
+        return math.trunc(self.get_seconds(tick) / self.unit)
+
+    def get_seconds(self, tick):
+        return (self.timeparser(tick) - self.epoch).total_seconds()
 
 
 class BinaryVectorizor(Vectorizor):
     """ Vectorizing trail as a 0-1 string each element of which indicates the presence of user at a location (type)
     """
-    def __init__(self, namespace, veclen=100, timeparser=TimeParser(), isaccum=False):
-        super(BinaryVectorizor, self).__init__(namespace, veclen, timeparser)
+    def __init__(self, namespace, isaccum=True, **kargs):
+
+        super(BinaryVectorizor, self).__init__(namespace, **kargs)
+        #LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, isaccum=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(isaccum), str(timeparser), str(normalized)))
         if isaccum:
             self.process = self.process_accum
         else:
             self.process = self.process_binary
-        self.timeparser = timeparser
+        config = dict([(k, getattr(self, k)) for k in dir(self) if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))])
+        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), config))
 
-    def process_binary(self, trail):
+    def process_binary(self, trail, target=None):
         """ This will only set the time slot to be one at the check-in location
         """
-        vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
+        if target is not None:
+            vec = target
+        else:
+            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
-            tickslot = math.trunc(self.timeparser.parse(c['tick']) / self.unit)
-            vec[poi_id, tickslot] = 1
+            tickslot = self.get_timeslot(c['tick'])
+            vec[tickslot, poi_id] = 1
         return vec
 
-    def process_accum(self, trail):
+    def process_accum(self, trail, target=None):
         """ This will add more weight if one time slot gets more check-in
         """
-        vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
+        if target is not None:
+            vec = target
+        else:
+            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
-            tickslot = math.trunc(self.timeparser.parse(c['tick']) / self.unit)
-            vec[poi_id, tickslot] += 1
+            tickslot = self.get_timeslot(c['tick'])
+            vec[tickslot, poi_id] += 1
         return vec
 
 
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, veclen=100, interval=(0., 24 * 3600.), kernel=gaussian_pdf, params=(3600,), isaccum=False, timeparser=TimeParser(), normalized=False):
-        super(KernelVectorizor, self).__init__(namespace, veclen, timeparser)
-        LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, isaccum=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(isaccum), str(timeparser), str(normalized)))
-        self.veclen = veclen
-        self.normalized = normalized
+    def __init__(self, namespace, kernel=gaussian_pdf, params=(3600,), isaccum=False, normalized=False, **kargs):
+        super(KernelVectorizor, self).__init__(namespace, **kargs)
         self.kernel = kernel
         self.params = params
-        self.axis = NP.linspace(*interval, num=veclen, endpoint=False)
+        self.normalized = normalized
+        self.interval = (0, (self.eschatos - self.epoch).total_seconds())
+        self.axis = NP.linspace(*self.interval, num=self.veclen, endpoint=False)
         if isaccum:
             self.aggr = NP.add
         else:
             self.aggr = NP.fmax
+        config = dict([(k, getattr(self, k)) for k in dir(self) if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))])
+        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), config))
 
-    def process(self, trail):
+    def process(self, trail, target=None):
         """ accumulating gaussian shaped function
         """
-        vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
+        if target is not None:
+            vec = target
+        else:
+            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
         for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
             idx = self.namespace.index(poi)
-            vec[idx][:] = kernel_smooth(self.axis, [self.timeparser.parse(c['tick']) for c in checkins], self.params, aggr=self.aggr, kernel=self.kernel)
+            vec[:, idx] = kernel_smooth(self.axis,
+                                        [self.get_seconds(c['tick']) for c in checkins],
+                                        self.params,
+                                        aggr=self.aggr,
+                                        kernel=self.kernel)
         NP.add(vec, EPSILON, vec)
         if self.normalized:
             unity = NP.sum(vec, axis=0)
@@ -237,4 +242,4 @@ class KernelVectorizor(Vectorizor):
     def get_timeslot(self, t):
         """ Return the timeslot
         """
-        return self.axis.searchsorted(self.timeparser.parse(t)) - 1
+        return self.axis.searchsorted(self.get_seconds(t)) - 1

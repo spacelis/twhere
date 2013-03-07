@@ -14,25 +14,26 @@ import logging
 logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
-import numpy as NP
-from numpy.lib.stride_tricks import as_strided
 import math
 from datetime import datetime, timedelta
 import itertools
-from model.colfilter import kernel_smooth
-from model.colfilter import gaussian_pdf
+from pprint import pformat
+import numpy as NP
+from numpy.lib.stride_tricks import as_strided
+from mlmodels.model.colfilter import kernel_smooth
+from mlmodels.model.colfilter import gaussian_pdf, uniform_pdf  # pylint: disable=W402
 
 
 EPSILON = 1e-10
 
 
-def iter_checkin_trails(seq, key=lambda x: x['trail_id']):
+def checkin_trails(seq, key=lambda x: x['trail_id']):
     """ A generating function for trails
 
         Arguments:
             seq -- a sequence of check-ins interpreted as a dict() containing at least a key of 'trail_id'
     """
-    return itertools.groupby(seq, key=key)
+    return [list(cks) for _, cks in itertools.groupby(seq, lambda x: x['trail_id'])]
 
 
 # -------------------------------------------------
@@ -73,21 +74,22 @@ def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
 class TrailVectorSegmentSet(object):
     """ Cutting vectorized trails in to segments along time dimension according to given reference point.
     """
-    def __init__(self, data, ref, seglen=100):
+    def __init__(self, data, seglen=100):
         """ Create a view as a vector of trail segments.
         Each element is a matrix of time [(of the given seglen) x user x poi].
         For example, as_segments([A, B, C, D, E], 3) == [[A, B, C], [B, C, D], [C, D, E])
 
             Arguments:
-                data -- a 3D NP.array() time x user x poi
-                ref -- a timeslot used as reference
+                data -- a 3D NP.array() [time, user, poi]
                 seglen -- the length of segments in timeslots
+
+            Return:
+                a 5d array [offset, seg, time, user, poi]
         """
         assert len(data.shape) == 3, 'Trails must be stored as [time] * [user] * [poi]'
         super(TrailVectorSegmentSet, self).__init__()
         self.length, self.user_num, self.poi_num = data.shape
         self.seglen = seglen
-        self.ref = ref
 
         self.frame_num = self.length - self.seglen + 1  # Frames are sliding windows of segment length
         self.snapshot_bytesize = self.user_num * self.poi_num * data.itemsize
@@ -95,18 +97,57 @@ class TrailVectorSegmentSet(object):
                                   shape=(self.frame_num, seglen, self.user_num, self.poi_num),
                                   strides=(self.snapshot_bytesize, self.snapshot_bytesize, self.poi_num * data.itemsize, data.itemsize))
 
-    def enumerate_segment_sets(self):
+    def enumerate_segment_sets(self, refslot):
         """ Enumerating segment sets according to reference point
         """
-        for i in NP.arange((self.ref + 1) % self.seglen, self.ref, self.seglen):  # including the ref point as the last time point in a segment
+        for i in NP.arange((refslot + 1) % self.seglen, refslot, self.seglen):  # including the refslot point as the last time point in a segment
             yield i, self.segsets[i]
 
-    def enumerate_segments(self):
+    def enumerate_segments(self, refslot):
         """ Enumerating segments
         """
-        for t, segset in self.enumerate_segment_sets():
+        for t, segset in self.enumerate_segment_sets(refslot):
             for u in range(self.user_num):
                 yield u, t, segset
+
+
+def as_vector_segments(data, ref, seglen):
+    """ return a 4d matrix to represent segments,
+
+        Arguments:
+            data -- a 3d array [user, poi, time]
+            ref -- the reference point of time in terms of timeslot (int)
+            seglen -- the length of a segment
+
+        Return:
+            4d array [user, segment, poi, time]
+    """
+    user_num, poi_num, length = data.shape
+
+    offset = ((ref + 1) % seglen)
+    segment_num = (length - offset) / seglen  # Frames are sliding windows of segment length
+    longtrail_bytesize = poi_num * length * data.itemsize
+    return as_strided(data,
+                      shape=(user_num, segment_num, 2, poi_num, seglen),
+                      strides=(longtrail_bytesize,
+                               seglen * data.itemsize,
+                               offset * data.itemsize,
+                               length * data.itemsize,
+                               data.itemsize))[:, :, 1, :, :]
+
+def as_mask(data, ref, seglen, level=1):
+    user_num, length = data.shape
+
+    offset = ((ref + 1) % seglen)
+    segment_num = (length - offset) / seglen  # Frames are sliding windows of segment length
+    longtrail_bytesize = length * data.itemsize
+    segs = as_strided(data,
+                      shape=(user_num, segment_num, 2, seglen),
+                      strides=(longtrail_bytesize,
+                               seglen * data.itemsize,
+                               offset * data.itemsize,
+                               data.itemsize))[:, :, 1, :]
+    return (NP.sum(segs, axis=2) > level)
 
 
 # -------------------------------------------------
@@ -138,18 +179,17 @@ class Vectorizor(object):
                  unit=timedelta(seconds=24 * 36),
                  epoch=datetime(2010, 6, 1),
                  eschatos=datetime(2011, 6, 1),
-                 timeparser=lambda x: x):
+                 timeparser=None):
 
         super(Vectorizor, self).__init__()
         self.namespace = namespace
         self.unit = unit if isinstance(unit, timedelta) else str2timedelta(unit)
         self.epoch = epoch
         self.eschatos = eschatos
-        self.timeparser = timeparser
 
         self.unit = unit.total_seconds()
         self.veclen = (self.eschatos - self.epoch).total_seconds() / self.unit
-        self.timeparser = timeparser
+        self.timeparser = timeparser if timeparser is not None else lambda x: x
 
     def process(self, trail, target=None):
         raise NotImplemented
@@ -159,6 +199,12 @@ class Vectorizor(object):
 
     def get_seconds(self, tick):
         return (self.timeparser(tick) - self.epoch).total_seconds()
+
+    def __str__(self):
+        attrs = [(k, repr(getattr(self, k))) for k in dir(self)]
+        attrs = filter(lambda (k, v): not (k.startswith('_') or hasattr(getattr(self, k), 'im_self')), attrs)
+        attrs = [(k, v) if len(v) < 50 else (k, v[:47] + '...') for k, v in attrs]
+        return pformat(dict(attrs))
 
 
 class BinaryVectorizor(Vectorizor):
@@ -172,8 +218,18 @@ class BinaryVectorizor(Vectorizor):
             self.process = self.process_accum
         else:
             self.process = self.process_binary
-        config = dict([(k, getattr(self, k)) for k in dir(self) if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))])
-        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), config))
+        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+
+    @classmethod
+    def from_config(cls, conf):
+        """ Constructing from conf
+        """
+        return cls(conf['data.namespace'],
+                   isaccum=conf['vec.isaccum'],
+                   unit=conf['vec.unit'],
+                   epoch=conf['vec.epoch'],
+                   eschatos=conf['vec.eschatos'],
+                   timeparser=conf['vec.timeparser'])
 
     def process_binary(self, trail, target=None):
         """ This will only set the time slot to be one at the check-in location
@@ -181,11 +237,11 @@ class BinaryVectorizor(Vectorizor):
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
+            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[tickslot, poi_id] = 1
+            vec[poi_id, tickslot] = 1
         return vec
 
     def process_accum(self, trail, target=None):
@@ -194,20 +250,20 @@ class BinaryVectorizor(Vectorizor):
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
+            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[tickslot, poi_id] += 1
+            vec[poi_id, tickslot] += 1
         return vec
 
 
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, kernel=gaussian_pdf, params=(3600,), isaccum=False, normalized=False, **kargs):
+    def __init__(self, namespace, kernel='gaussian_pdf', params=(3600,), isaccum=False, normalized=False, **kargs):
         super(KernelVectorizor, self).__init__(namespace, **kargs)
-        self.kernel = kernel
+        self.kernel = globals()[kernel]
         self.params = params
         self.normalized = normalized
         self.interval = (0, (self.eschatos - self.epoch).total_seconds())
@@ -216,8 +272,21 @@ class KernelVectorizor(Vectorizor):
             self.aggr = NP.add
         else:
             self.aggr = NP.fmax
-        config = dict([(k, getattr(self, k)) for k in dir(self) if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))])
-        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), config))
+        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+
+    @classmethod
+    def from_config(cls, conf):
+        """ Constructing from configurations
+        """
+        return cls(conf['data.namespace'],
+                   kernel=conf['vec.kernel'],
+                   params=conf['vec.kernel.params'],
+                   isaccum=conf['vec.isaccum'],
+                   normalized=conf['vec.kernel.normalized'],
+                   unit=conf['vec.unit'],
+                   epoch=conf['vec.epoch'],
+                   eschatos=conf['vec.eschatos'],
+                   timeparser=conf['vec.timeparser'])
 
     def process(self, trail, target=None):
         """ accumulating gaussian shaped function
@@ -225,10 +294,10 @@ class KernelVectorizor(Vectorizor):
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((self.veclen, len(self.namespace)), dtype=NP.float32)
+            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
         for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
             idx = self.namespace.index(poi)
-            vec[:, idx] = kernel_smooth(self.axis,
+            vec[idx, :] = kernel_smooth(self.axis,
                                         [self.get_seconds(c['tick']) for c in checkins],
                                         self.params,
                                         aggr=self.aggr,

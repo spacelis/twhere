@@ -12,10 +12,9 @@ __version__ = '0.0.1'
 
 
 import os
-import site
-site.addsitedir('../model')
-from evaluate.mrr import mrr
+from mlmodels.evaluate.mrr import mrr
 import numpy as NP
+from texttable import Texttable
 
 
 PREFICES = ['NY', 'CH', 'LA', 'SF']
@@ -29,7 +28,12 @@ def eval_dir(path):
     """
     files = sorted(os.listdir(path))
     names = sorted(set([n.rsplit('.', 1)[0][3:] for n in files if n.endswith('.res')]))
-    print ' ' * 11, '      '.join(PREFICES)
+    table = Texttable()
+    table.set_deco(Texttable.HEADER)
+    table.set_cols_dtype(['t', 'f', 'f', 'f', 'f'])
+    table.set_cols_align(["l", "r", "r", "r", "r"])
+    table.set_precision(4)
+    table.add_row(['', ] + PREFICES)
     for n in names:
         scores = list()
         for prefix in PREFICES:
@@ -37,8 +41,9 @@ def eval_dir(path):
                 eva = NP.array([int(v) for v in open(os.path.join(path, '%s_%s.res' % (prefix, n)))], dtype=NP.float64)
                 scores.append(mrr(eva))
             except:
-                scores.append(-1.)
-        print '%10s' % (n,), '  '.join([('%.4f' % v) for v in scores])
+                scores.append('N/A')
+        table.add_row([n, ] + scores)
+    print table.draw()
 
 
 if __name__ == '__main__':

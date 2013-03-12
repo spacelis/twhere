@@ -4,15 +4,13 @@
 Description:
     Predict users trail by their previous visits.
 History:
+    0.2.0 Long trail scheme
     0.1.0 The first version.
 """
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 __author__ = 'SpaceLis'
 
 import logging
-logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
-LOGGER = logging.getLogger(__name__)
-
 from random import shuffle
 from datetime import timedelta
 
@@ -26,35 +24,32 @@ from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
 from twhere.trail import as_vector_segments
 from twhere.trail import as_mask
-from dataprov import TextData
+from twhere.dataprov import TextData
 from collections import Counter
 
 
 class PredictingMajority(object):
     """ Preducting the majority class
     """
-    def __init__(self, namespace):
+    def __init__(self, conf):
         super(PredictingMajority, self).__init__()
-        self.namespace = namespace
-        self.dist = dict([(n, 0) for n in namespace])
+        self.logger = logging.getLogger(__name__)
+        self.namespace = conf['data.namespace']
+        self.dist = Counter(self.namespace)
+        self.majority = None
 
     def train(self, trail_set):
         """ Calculate the distribution of visiting location type
         """
         for tr in trail_set:
-            for c in tr:
-                self.dist[c['poi']] += 1
-        self.majority = sorted(self.dist.iteritems(), key=lambda x: x[1], reverse=True)[0][0]
-        LOGGER.info('Majority Class: %s' % (self.majority,))
+            self.dist.update([c['poi'] for c in tr])
+        self.majority = [x[0] for x in self.dist.most_common()]
+        self.logger.info('Majority Class: %s' % (self.majority[0],))
 
-    def predict(self, tr, tick):
+    def predict(self, tr, tick): # pylint: disable-msg=W0613
         """ predicting the last
         """
-        rank = list(self.namespace)
-        shuffle(rank)
-        pos = rank.index(self.majority)
-        rank[0], rank[pos] = rank[pos], rank[0]
-        return rank
+        return self.majority
 
 
 class PredictingTimeMajority(object):
@@ -62,26 +57,29 @@ class PredictingTimeMajority(object):
     """
     def __init__(self, conf):
         super(PredictingTimeMajority, self).__init__()
+        self.logger = logging.getLogger(__name__)
         self.namespace = conf['data.namespace']
+        self.seglen = conf['cf.segment']
         self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
-        self.dist = NP.zeros((len(self.namespace), conf['vec.len']))
+        self.dist = NP.zeros((len(self.namespace), self.seglen))
 
     def train(self, trail_set):
         """ Calculate the distribution of visiting location type
         """
         for tr in trail_set:
             for c in tr:
-                t = self.vectorizor.get_timeslot(c['tick'])
+                t = self.vectorizor.get_timeslot(c['tick']) % self.seglen
                 p = self.mapping(c['poi'])
                 self.dist[p, t] += 1
-        LOGGER.info('Majority Class: %s' % (self.dist,))
 
-    def predict(self, tr, tick):
+    def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ predicting the last
         """
-        return sorted(self.namespace, key=lambda x: self.dist[self.mapping(x), self.vectorizor.get_timeslot(tick)], reverse=True)
+        return sorted(self.namespace,
+                      key=lambda x: self.dist[self.mapping(x), self.vectorizor.get_timeslot(tick) % self.seglen],
+                      reverse=True)
 
 
 class PredictingLast(object):
@@ -89,12 +87,15 @@ class PredictingLast(object):
     """
     def __init__(self, conf):
         super(PredictingLast, self).__init__()
+        self.logger = logging.getLogger(__name__)
         self.namespace = conf['data.namespace']
 
     def train(self, trail_set):
+        """ Train model
+        """
         pass
 
-    def predict(self, tr, tick):
+    def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ predicting the last
         """
         rank = list(self.namespace)
@@ -109,6 +110,7 @@ class MarkovChainModel(object):
     """
     def __init__(self, conf):
         super(MarkovChainModel, self).__init__()
+        self.logger = logging.getLogger(__name__)
         self.namespace = conf['data.namespace']
         self.model = MarkovModel(self.namespace)
 
@@ -120,7 +122,7 @@ class MarkovChainModel(object):
             poitrails.append([c['poi'] for c in tr])
         self.model.learn_from(poitrails)
 
-    def predict(self, tr, tick):
+    def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ Evaluate the model by trail_set
         """
         return self.model.rank_next(tr[-1]['poi'])
@@ -136,6 +138,7 @@ class ColfilterModel(object):
                 conf -- a dict-like object holding configurations
         """
         super(ColfilterModel, self).__init__()
+        self.logger = logging.getLogger(__name__)
         self.namespace = conf['data.namespace']
         self.seglen = conf['cf.segment']
         self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
@@ -143,6 +146,8 @@ class ColfilterModel(object):
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
         self.model = VectorDatabase.from_config(conf)
+        self.vecs = None
+        self.ck_cnt = None
 
     def train(self, trail_set):
         """ Train the model
@@ -154,7 +159,10 @@ class ColfilterModel(object):
             for c in tr:
                 tick = self.vectorizor.get_timeslot(c['tick'])
                 self.ck_cnt[idx, tick] += 1 if self.ck_cnt[idx, tick] < 200 else 0
-        LOGGER.info('Data Loaded: {0} ({1}) / {2} MB'.format(self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
+        self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
+
+        zeros = NP.sum(self.vecs > 0.01)
+        self.logger.info('Sparsity: {0} / {1} = {2}'.format(zeros, self.vecs.size, float(zeros) / self.vecs.size))
 
     def predict(self, tr, tick):
         """ Predicting with colfilter model
@@ -176,7 +184,7 @@ def rank_ref(model, history, reftick, refpoi):
     return rank.index(refpoi) + 1
 
 
-def iter_test_instance(test_tr_set, numpertrail=10, segperiod=timedelta(hours=24)):
+def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24)):
     """ generating testing instance
     """
     for trl in test_tr_set:
@@ -201,39 +209,41 @@ def print_trail(trail):
 FOLDS = 10
 
 
-def experiment(conf):
+def experiment(conf): # pylint: disable-msg=R0914
     """ running the experiment
     """
-    LOGGER.info('Reading data from {0}'.format(conf['expr.city.name']))
+    logger = logging.getLogger(__name__)
+    logger.info('--------------------  Experimenting on {0}'.format(conf['expr.city.name']))
+    logger.info('Reading data from {0}'.format(conf['expr.city.name']))
     data_provider = TextData(conf['expr.city.id'], conf['expr.target'])
     conf['data.namespace'] = data_provider.get_namespace()
     data = data_provider.get_data()
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
 
-    LOGGER.info('Predicting {0}'.format(conf['expr.target']))
+    logger.info('Predicting {0}'.format(conf['expr.target']))
     total_trails = checkin_trails(data)
-    LOGGER.info('Trails in given dataset: {0}'.format(len(total_trails)))
+    logger.info('Trails in given dataset: {0}'.format(len(total_trails)))
     for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, FOLDS)):
-        LOGGER.info('Fold: {0}/{1}'.format(fold_id + 1, FOLDS))
+        logger.info('----------  Fold: {0}/{1}'.format(fold_id + 1, FOLDS))
 
-        LOGGER.info('Training...')
+        logger.info('Training...')
         m = model(conf)
         train_tr_set = list(train_tr)
         test_tr_set = list(test_tr)
         m.train(train_tr_set)
 
-        LOGGER.info('Checkins: {0} / {1}'.format(sum(map(len, test_tr_set)),
-                                                 sum(map(len, train_tr_set))))
-        LOGGER.info('Trails: {0} / {1}'.format(len(test_tr_set), len(train_tr_set)))
-        LOGGER.info('Testing...[Output: {0}]'.format(output.name))
+        logger.info('Checkins: {0} / {1}'.format(sum([len(tr) for tr in test_tr_set]),
+                                                 sum([len(tr) for tr in train_tr_set])))
+        logger.info('Trails: {0} / {1}'.format(len(test_tr_set), len(train_tr_set)))
+        logger.info('Testing...[Output: {0}]'.format(output.name))
 
         test_cnt = Counter()
         for segtrl in iter_test_instance(test_tr_set):
             htrl, reftick, refpoi = segtrl[:-1], segtrl[-1]['tick'], segtrl[-1]['poi']
             print >> output, rank_ref(m, htrl, reftick, refpoi)
             test_cnt.update(['instances'])
-        LOGGER.info('Tested trails: {0}'.format(test_cnt['instances']))
+        logger.info('Tested trails: {0}'.format(test_cnt['instances']))
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@
 File: config.py
 Author: SpaceLis
 Changes:
+    0.0.2 dict like configuration to ease configuration passing on
     0.0.1 The first version
 Description:
     This is an example of config.py which will be used in twhere.py
@@ -22,7 +23,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'vec.timeparser': None,
                   'vec.kernel': 'gaussian_pdf',
                   'vec.kernel.params': (3600.,),
-                  'vec.kernel.isaccum': True,
+                  'vec.kernel.accumulated': True,
                   'vec.kernel.normalized': False,
                   'vec.kernel.reuse_orig': False,
                   'discounting.func': 'exponent',

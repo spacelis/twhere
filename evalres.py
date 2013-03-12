@@ -4,11 +4,12 @@
 File: evalres.py
 Author: SpaceLis
 Changes:
+    0.0.2 Better table output
     0.0.1 The first version
 Description:
     Evaluate the results in directory by MRR
 """
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 
 import os
@@ -33,7 +34,7 @@ def eval_dir(path):
     table.set_cols_dtype(['t', 'f', 'f', 'f', 'f'])
     table.set_cols_align(["l", "r", "r", "r", "r"])
     table.set_precision(4)
-    table.add_row(['', ] + PREFICES)
+    table.add_rows([['', ] + PREFICES])
     for n in names:
         scores = list()
         for prefix in PREFICES:

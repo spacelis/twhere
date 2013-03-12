@@ -4,10 +4,11 @@
 Description:
     Generating Trails
 History:
+    0.2.0 long trail scheme
     0.1.1 sufficient tests for existing functions
     0.1.0 The first version.
 """
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 __author__ = 'SpaceLis'
 
 import logging
@@ -21,7 +22,7 @@ from pprint import pformat
 import numpy as NP
 from numpy.lib.stride_tricks import as_strided
 from mlmodels.model.colfilter import kernel_smooth
-from mlmodels.model.colfilter import gaussian_pdf, uniform_pdf  # pylint: disable=W402
+from mlmodels.model.colfilter import gaussian_pdf, uniform_pdf  # pylint: disable-msg=W0611,I0011
 
 
 EPSILON = 1e-10
@@ -61,7 +62,7 @@ def diff_all_filter(trails, key=lambda x: x['pid']):
 def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
     """ Filter trails so that each 'poi' has exactly one trail ends with it
     """
-    for poi, trls in itertools.groupby(sorted(list(trails), key=key), key=key):
+    for _, trls in itertools.groupby(sorted(list(trails), key=key), key=key):
         trls = list(trls)
         for _ in range(maximum):
             yield trls[NP.random.randint(len(trls))]
@@ -135,6 +136,7 @@ def as_vector_segments(data, ref, seglen):
                                length * data.itemsize,
                                data.itemsize))[:, :, 1, :, :]
 
+
 def as_mask(data, ref, seglen, level=1):
     user_num, length = data.shape
 
@@ -192,7 +194,7 @@ class Vectorizor(object):
         self.timeparser = timeparser if timeparser is not None else lambda x: x
 
     def process(self, trail, target=None):
-        raise NotImplemented
+        raise NotImplementedError
 
     def get_timeslot(self, tick):
         return math.trunc(self.get_seconds(tick) / self.unit)
@@ -210,11 +212,11 @@ class Vectorizor(object):
 class BinaryVectorizor(Vectorizor):
     """ Vectorizing trail as a 0-1 string each element of which indicates the presence of user at a location (type)
     """
-    def __init__(self, namespace, isaccum=True, **kargs):
+    def __init__(self, namespace, accumulated=True, **kargs):
 
         super(BinaryVectorizor, self).__init__(namespace, **kargs)
-        #LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, isaccum=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(isaccum), str(timeparser), str(normalized)))
-        if isaccum:
+        #LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, accumulated=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(accumulated), str(timeparser), str(normalized)))
+        if accumulated:
             self.process = self.process_accum
         else:
             self.process = self.process_binary
@@ -225,7 +227,7 @@ class BinaryVectorizor(Vectorizor):
         """ Constructing from conf
         """
         return cls(conf['data.namespace'],
-                   isaccum=conf['vec.isaccum'],
+                   accumulated=conf['vec.kernel.accumulated'],
                    unit=conf['vec.unit'],
                    epoch=conf['vec.epoch'],
                    eschatos=conf['vec.eschatos'],
@@ -261,14 +263,14 @@ class BinaryVectorizor(Vectorizor):
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, kernel='gaussian_pdf', params=(3600,), isaccum=False, normalized=False, **kargs):
+    def __init__(self, namespace, kernel='gaussian_pdf', params=(3600,), accumulated=False, normalized=False, **kargs):
         super(KernelVectorizor, self).__init__(namespace, **kargs)
         self.kernel = globals()[kernel]
         self.params = params
         self.normalized = normalized
         self.interval = (0, (self.eschatos - self.epoch).total_seconds())
         self.axis = NP.linspace(*self.interval, num=self.veclen, endpoint=False)
-        if isaccum:
+        if accumulated:
             self.aggr = NP.add
         else:
             self.aggr = NP.fmax
@@ -281,7 +283,7 @@ class KernelVectorizor(Vectorizor):
         return cls(conf['data.namespace'],
                    kernel=conf['vec.kernel'],
                    params=conf['vec.kernel.params'],
-                   isaccum=conf['vec.isaccum'],
+                   accumulated=conf['vec.kernel.accumulated'],
                    normalized=conf['vec.kernel.normalized'],
                    unit=conf['vec.unit'],
                    epoch=conf['vec.epoch'],

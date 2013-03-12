@@ -4,17 +4,16 @@
 File: runtest.py
 Author: SpaceLis
 Changes:
+    0.1.0 improved logging
     0.0.2 remove parallel as not supported on servers
     0.0.1 The first version
 Description:
     running the experiments
 """
-__version__ = '0.0.2'
+__version__ = '0.1.0'
 
 import sys
 import logging
-logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
-LOGGER = logging.getLogger(__name__)
 from twhere.exprmodels import experiment
 
 import os
@@ -46,13 +45,13 @@ def cityloop(conf, resdir, name):
 
 
 # -------------------------------------------------
-# EPERIMENTS
+# EXPERIMENTS
 #
 def experimentColfilter(poicol, resdir, city_idx=None):
     """docstring for experimentColfilter
     """
     conf = Configuration()
-    conf['expr.target'] = 'base'
+    conf['expr.target'] = poicol
     conf['expr.model'] = 'ColfilterModel'
     conf['vec.isaccum'] = True
     conf['vec.normalized'] = True
@@ -67,39 +66,94 @@ def experimentColfilter(poicol, resdir, city_idx=None):
                 run_experiment(conf, resdir, 'n%03d_s%6.2gh' % (simnum, sigmahour), city_idx)
 
 
-def experimentMarkovModel(poicol, resdir):
+def experimentMarkovModel(poicol, resdir, city_idx=None):
     """docstring for experimentColfilter
     """
     conf = Configuration()
+    conf['expr.target'] = poicol
     conf['expr.model'] = 'MarkovChainModel'
-    cityloop(conf, resdir, 'mm')
+    if city_idx is None:
+        cityloop(conf, resdir, 'mm')
+    else:
+        run_experiment(conf, resdir, 'mm', city_idx)
 
 
-def experimentPredictingMajority(poicol, resdir):
+def experimentPredictingMajority(poicol, resdir, city_idx=None):
     """docstring for experimentColfilter
     """
     conf = Configuration()
+    conf['expr.target'] = poicol
     conf['expr.model'] = 'PredictingMajority'
-    cityloop(conf, resdir, 'pm')
+    if city_idx is None:
+        cityloop(conf, resdir, 'pm')
+    else:
+        run_experiment(conf, resdir, 'pm', city_idx)
 
 
-def experimentPredictingTimeMajority(poicol, resdir):
+def experimentPredictingTimeMajority(poicol, resdir, city_idx=None):
     """docstring for experimentColfilter
     """
     conf = Configuration()
+    conf['expr.target'] = poicol
     conf['expr.model'] = 'PredictingTimeMajority'
-    cityloop(conf, resdir, 'ptm')
+    if city_idx is None:
+        cityloop(conf, resdir, 'ptm')
+    else:
+        run_experiment(conf, resdir, 'ptm', city_idx)
 
 
-def experimentPredictingLast(poicol, resdir):
+def experimentPredictingLast(poicol, resdir, city_idx=None):
     """docstring for experimentColfilter
     """
     conf = Configuration()
+    conf['expr.target'] = poicol
     conf['expr.model'] = 'PredictingLast'
-    cityloop(conf, resdir, 'pl')
+    if city_idx is None:
+        cityloop(conf, resdir, 'pl')
+    else:
+        run_experiment(conf, resdir, 'pl', city_idx)
+
+
+def mockTrainTextExport(poicol, resdir, city_idx=None):
+    """ export the training trails and testing instance for inspection
+    """
+    conf = Configuration()
+    conf['expr.target'] = poicol
+    conf['expr.model'] = 'mockTrainTextExport'
+    if city_idx is None:
+        cityloop(conf, resdir, 'tt')
+    else:
+        run_experiment(conf, resdir, 'tt', city_idx)
+
+
+def setup_logging(filename, default_path='logging.conf.yaml', default_level=logging.INFO, env_key='LOG_CFG'):
+    """ Setup logging
+    """
+    import yaml
+    import logging.config
+    path = default_path
+    value = os.getenv(env_key, None)
+    if value:
+        path = value
+    if os.path.exists(path):
+        with open(path, 'rt') as f:
+            logconf = yaml.load(f.read())
+            logconf['handlers']['info_file_handler']['filename'] = filename
+        logging.config.dictConfig(logconf)
+    else:
+        logging.basicConfig(level=default_level)
 
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print >> sys.stderr, 'No folder provided for results'
+        print >> sys.stderr, 'Usage: runtest.py <dir>'
+        sys.exit(-1)
+    resdir = sys.argv[1]
+    if not os.path.isdir(resdir):
+        os.mkdir(resdir)
+    setup_logging(sys.argv[1] + '/log')
+    LOGGER = logging.getLogger(__name__)
     LOGGER.debug('DEBUG is enabled')
     try:
         import resource
@@ -107,25 +161,10 @@ if __name__ == '__main__':
     except:
         LOGGER.warn('Failed set resource limits.')
 
-    if len(sys.argv) < 2:
-        LOGGER.fatal('No folder provided for results')
-        print >> sys.stderr, 'Usage: runtest.py <dir>'
-        sys.exit(-1)
-    resdir = sys.argv[1]
-    if not os.path.isdir(resdir):
-        os.mkdir(resdir)
-
-    # -------------------------------------------------
-    # Do NOT run experiments at one go, the parameters would confuse
-    # -------------------------------------------------
-
-    #experimentPredictingLast('category', resdir)
-    #experimentMarkovModel('category', resdir)
-    #experimentPredictingMajority('category', resdir)
-    #experimentPredictingTimeMajority('category', resdir)
-    experimentColfilter('base', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
-    #generate_refs('base', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
-    #experimentColfilterHistory('category', resdir, None if len(sys.argv) < 3 else int(sys.argv[2]))
-    #experimentColfilterHistoryDiscounting('category', resdir)
-    #import profile
-    #profile.run('experiment()')
+    city_idx = None if len(sys.argv) < 3 else int(sys.argv[2])
+    experimentPredictingLast('base', resdir, city_idx)
+    experimentMarkovModel('base', resdir, city_idx)
+    experimentPredictingMajority('base', resdir, city_idx)
+    experimentPredictingTimeMajority('base', resdir, city_idx)
+    #experimentColfilter('base', resdir, city_idx)
+    #mockTrainTextExport('base', resdir, city_idx)

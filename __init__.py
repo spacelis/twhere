@@ -7,7 +7,3 @@ Changes:
 Description:
 """
 __version__ = '0.0.1'
-
-
-import site
-site.addsitedir('.')

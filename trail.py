@@ -21,11 +21,51 @@ import itertools
 from pprint import pformat
 import numpy as NP
 from numpy.lib.stride_tricks import as_strided
-from mlmodels.model.colfilter import kernel_smooth
-from mlmodels.model.colfilter import gaussian_pdf, uniform_pdf  # pylint: disable-msg=W0611,I0011
 
 
 EPSILON = 1e-10
+
+# ----------------------------------------------------------------------------------------------------
+# KERNELS
+#
+def gaussian_pdf(axis, mu, params):
+    """ Generate a sample of Gaussian distribution (mu, ss) in interval with veclen samples
+
+        Arguments:
+            axis -- a vector of x coordinates each element of which is a sample point
+            mu -- a float indication the mean of Gaussian distribution
+            sigma -- a float indicating the sigma of Gaussian distribution
+    """
+    (sigma,) = params
+    s = (axis - mu) / sigma
+    return NP.exp(-NP.square(s))
+
+
+def uniform_pdf(axis, mu, params):  #  mu is a compromise to the interface pylint: disable-msg=W0613
+    """ Generate a sample of uniform distribution
+
+        Arguments:
+            axis -- a vector of x coordinates each element of which is a sample point
+            mu -- a float indication the mean of Gaussian distribution
+            sigma -- a float indicating the sigma of Gaussian distribution
+    """
+    return NP.ones_like(axis)
+
+
+def kernel_smooth(axis, mus, params, aggr=NP.add, kernel=gaussian_pdf):
+    """ Cumulating the Gaussian distribution
+
+        Arguments:
+            mus -- a set of mus
+            params -- the parameters for kernels, e.g., sigma for Gaussian
+            axis -- a vector of x coordinates each element of which is a sample point
+            aggr -- the aggragation method to be used for the set of Gaussian distribution. Default=NP.add
+            kernel -- name of kernel distribution to use for smoothing
+    """
+    vec = NP.zeros_like(axis)
+    for x in mus:
+        aggr(kernel(axis, x, params), vec, vec)
+    return vec
 
 
 def checkin_trails(seq, key=lambda x: x['trail_id']):
@@ -34,7 +74,7 @@ def checkin_trails(seq, key=lambda x: x['trail_id']):
         Arguments:
             seq -- a sequence of check-ins interpreted as a dict() containing at least a key of 'trail_id'
     """
-    return [list(cks) for _, cks in itertools.groupby(seq, lambda x: x['trail_id'])]
+    return [list(cks) for _, cks in itertools.groupby(seq, key=key)]
 
 
 # -------------------------------------------------
@@ -138,6 +178,8 @@ def as_vector_segments(data, ref, seglen):
 
 
 def as_mask(data, ref, seglen, level=1):
+    """ Create a histogram for prune calculations of useless vectors
+    """
     user_num, length = data.shape
 
     offset = ((ref + 1) % seglen)
@@ -176,7 +218,7 @@ def str2timedelta(s):
 class Vectorizor(object):
     """ Make trail into vectors
     """
-    def __init__(self,
+    def __init__(self,                       #  all argumnets are required pylint: disable-msg=R0913
                  namespace,
                  unit=timedelta(seconds=24 * 36),
                  epoch=datetime(2010, 6, 1),
@@ -194,28 +236,33 @@ class Vectorizor(object):
         self.timeparser = timeparser if timeparser is not None else lambda x: x
 
     def process(self, trail, target=None):
+        """ Processing trails to vectors
+        """
         raise NotImplementedError
 
     def get_timeslot(self, tick):
+        """ return current timeslot the tick belongs to
+        """
         return math.trunc(self.get_seconds(tick) / self.unit)
 
     def get_seconds(self, tick):
+        """ get the total seconds from epoch to tick
+        """
         return (self.timeparser(tick) - self.epoch).total_seconds()
 
     def __str__(self):
         attrs = [(k, repr(getattr(self, k))) for k in dir(self)]
-        attrs = filter(lambda (k, v): not (k.startswith('_') or hasattr(getattr(self, k), 'im_self')), attrs)
+        attrs = [(k, v) for k, v in attrs if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))]
         attrs = [(k, v) if len(v) < 50 else (k, v[:47] + '...') for k, v in attrs]
         return pformat(dict(attrs))
 
 
-class BinaryVectorizor(Vectorizor):
+class BinaryVectorizor(Vectorizor):                 # process method is linked in __init__ pylint: disable-msg=W0223
     """ Vectorizing trail as a 0-1 string each element of which indicates the presence of user at a location (type)
     """
     def __init__(self, namespace, accumulated=True, **kargs):
 
         super(BinaryVectorizor, self).__init__(namespace, **kargs)
-        #LOGGER.info('CONFIG: namespace=%d, veclen=%d, interval=%s, kernel=%s, params=%s, accumulated=%s, timeparser=%s, normalized=%s' % (len(namespace), veclen, str(interval), kernel, str(params), str(accumulated), str(timeparser), str(normalized)))
         if accumulated:
             self.process = self.process_accum
         else:
@@ -263,7 +310,13 @@ class BinaryVectorizor(Vectorizor):
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self, namespace, kernel='gaussian_pdf', params=(3600,), accumulated=False, normalized=False, **kargs):
+    def __init__(self,                        #  all argumnets are required pylint: disable-msg=R0913
+                 namespace,
+                 kernel='gaussian_pdf',
+                 params=(3600,),
+                 accumulated=False,
+                 normalized=False,
+                 **kargs):
         super(KernelVectorizor, self).__init__(namespace, **kargs)
         self.kernel = globals()[kernel]
         self.params = params
@@ -313,4 +366,4 @@ class KernelVectorizor(Vectorizor):
     def get_timeslot(self, t):
         """ Return the timeslot
         """
-        return self.axis.searchsorted(self.get_seconds(t)) - 1
+        return self.axis.searchsorted(self.get_seconds(t)) - 1  # axis is an array of sample points pylint: disable-msg=E1103

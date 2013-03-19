@@ -24,7 +24,7 @@ from mlmodels.model.colfilter import SparseVectorDatabase
 from mlmodels.model.mm import MarkovModel
 from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
-from twhere.trail import as_segments
+from twhere.trail import as_doublesegments
 from twhere.dataprov import TextData
 
 
@@ -153,7 +153,7 @@ class ColfilterModel(object):
         """ Train the model
         """
         for _, tr in enumerate(trail_set):
-            vecs = as_segments(self.vectorizor.process(tr), self.seglen)
+            vecs = as_doublesegments(self.vectorizor.process(tr), self.seglen)
             self.model.extend_dataitems(vecs)
         self.logger.info('Resource usage: {0}MB'.format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 

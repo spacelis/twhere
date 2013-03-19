@@ -202,6 +202,28 @@ def as_segments(vec, seglen, ref=-1):
                                vec.itemsize))[1, :, :, :]
 
 
+def as_doublesegments(vec, seglen, ref=-1):
+    """ return a 3d matrix to represent double segments for one trail.
+
+        Arguments:
+            vec -- a 2d array [poi, time]
+            seglen -- the length of a segment
+            ref -- the reference point of time in terms of timeslot (int)
+
+        Return:
+            a 3d array [segment, poi, time]
+    """
+    poi_num, length = vec.shape
+    offset = ((ref + 1) % seglen)
+    segment_num = (length - offset) / seglen - 1  # Frames are non-overlapping sliding windows of segment length
+    return as_strided(vec,
+                      shape=(2, segment_num, poi_num, 2 * seglen),
+                      strides=(offset * vec.itemsize,
+                               seglen * vec.itemsize,
+                               length * vec.itemsize,
+                               vec.itemsize))[1, :, :, :]
+
+
 def as_mask(data, ref, seglen, level=1):
     """ Create a histogram for prune calculations of useless vectors
     """

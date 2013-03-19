@@ -13,19 +13,19 @@ __author__ = 'SpaceLis'
 import logging
 from random import shuffle
 from datetime import timedelta
+from collections import Counter
+import resource
 
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
 
 from mlmodels.experiment.crossvalid import folds
-from mlmodels.model.colfilter import VectorDatabase
+from mlmodels.model.colfilter import SparseVectorDatabase
 from mlmodels.model.mm import MarkovModel
 from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
-from twhere.trail import as_vector_segments
-from twhere.trail import as_mask
+from twhere.trail import as_segments
 from twhere.dataprov import TextData
-from collections import Counter
 
 
 class PredictingMajority(object):
@@ -145,24 +145,17 @@ class ColfilterModel(object):
 
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
-        self.model = VectorDatabase.from_config(conf)
+        self.model = SparseVectorDatabase.from_config(conf)
         self.vecs = None
         self.ck_cnt = None
 
     def train(self, trail_set):
         """ Train the model
         """
-        self.vecs = NP.zeros((len(trail_set), len(self.namespace), self.vectorizor.veclen), dtype=NP.float32)
-        self.ck_cnt = NP.zeros((len(trail_set), self.vectorizor.veclen), dtype=NP.byte)
-        for idx, tr in enumerate(trail_set):
-            self.vecs[idx, :, :] = self.vectorizor.process(tr)
-            for c in tr:
-                tick = self.vectorizor.get_timeslot(c['tick'])
-                self.ck_cnt[idx, tick] += 1 if self.ck_cnt[idx, tick] < 200 else 0
-        self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
-
-        zeros = NP.sum(self.vecs > 0.01)
-        self.logger.info('Sparsity: {0} / {1} = {2}'.format(zeros, self.vecs.size, float(zeros) / self.vecs.size))
+        for _, tr in enumerate(trail_set):
+            vecs = as_segments(self.vectorizor.process(tr), self.seglen)
+            self.model.extend_dataitems(vecs)
+        self.logger.info('Resource usage: {0}MB'.format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 
     def predict(self, tr, tick):
         """ Predicting with colfilter model
@@ -170,9 +163,7 @@ class ColfilterModel(object):
         t = self.vectorizor.get_timeslot(tick)
         vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
 
-        self.model.load_data(as_vector_segments(self.vecs, t, self.seglen))
-        mask = as_mask(self.ck_cnt, t, self.seglen)
-        est = self.model.estimates_with_mask(vec, t, mask)
+        est = self.model.estimates(vec, t)
         rank = sorted(self.namespace, key=lambda x: est[self.mapping(x), -1], reverse=True)
         return rank
 

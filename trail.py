@@ -166,15 +166,40 @@ def as_vector_segments(data, ref, seglen):
     user_num, poi_num, length = data.shape
 
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen  # Frames are sliding windows of segment length
+    segment_num = (length - offset) / seglen  # Frames are non-overlapping sliding windows of segment length, because they are decided on-the-fly of prediction
     longtrail_bytesize = poi_num * length * data.itemsize
     return as_strided(data,
                       shape=(user_num, segment_num, 2, poi_num, seglen),
                       strides=(longtrail_bytesize,
-                               seglen * data.itemsize,
+                               seglen * data.itemsize, # shoundn't this be (seglen * poi_num * data.itemsize)
                                offset * data.itemsize,
                                length * data.itemsize,
                                data.itemsize))[:, :, 1, :, :]
+
+
+# This method is introduced for sparse vectors as a segment starting at any
+# time point is constructed by two neighboring vectors. Thus segments are not
+# overlapping.
+def as_segments(vec, seglen, ref=-1):
+    """ return a 3d matrix to represent segments for one trail.
+
+        Arguments:
+            vec -- a 2d array [poi, time]
+            seglen -- the length of a segment
+            ref -- the reference point of time in terms of timeslot (int)
+
+        Return:
+            a 3d array [segment, poi, time]
+    """
+    poi_num, length = vec.shape
+    offset = ((ref + 1) % seglen)
+    segment_num = (length - offset) / seglen  # Frames are non-overlapping sliding windows of segment length
+    return as_strided(vec,
+                      shape=(2, segment_num, poi_num, seglen),
+                      strides=(offset * vec.itemsize,
+                               seglen * vec.itemsize,
+                               length * vec.itemsize,
+                               vec.itemsize))[1, :, :, :]
 
 
 def as_mask(data, ref, seglen, level=1):

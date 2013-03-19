@@ -53,9 +53,10 @@ def experimentColfilter(poicol, resdir, city_idx=None):
     conf = Configuration()
     conf['expr.target'] = poicol
     conf['expr.model'] = 'ColfilterModel'
+    conf['cf.similarity'] = 'SparseCosineSimilarity'
     conf['vec.isaccum'] = True
     conf['vec.normalized'] = True
-    sigmahours = [0.25, 1., 4., 12., 24.]
+    sigmahours = [1., 4., 0.25, 12., 24.]
     for simnum in [100, 50, 5]:
         conf['cf.simnum'] = simnum
         for sigma, sigmahour in zip(map(lambda x: x * 3600., sigmahours), sigmahours):
@@ -162,9 +163,9 @@ if __name__ == '__main__':
         LOGGER.warn('Failed set resource limits.')
 
     city_idx = None if len(sys.argv) < 3 else int(sys.argv[2])
-    experimentPredictingLast('base', resdir, city_idx)
-    experimentMarkovModel('base', resdir, city_idx)
-    experimentPredictingMajority('base', resdir, city_idx)
-    experimentPredictingTimeMajority('base', resdir, city_idx)
-    #experimentColfilter('base', resdir, city_idx)
+    #experimentPredictingLast('base', resdir, city_idx)
+    #experimentMarkovModel('base', resdir, city_idx)
+    #experimentPredictingMajority('base', resdir, city_idx)
+    #experimentPredictingTimeMajority('base', resdir, city_idx)
+    experimentColfilter('base', resdir, city_idx)
     #mockTrainTextExport('base', resdir, city_idx)

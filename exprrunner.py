@@ -55,7 +55,7 @@ def experimentColfilter(poicol, resdir, city_idx=None):
     conf['expr.model'] = 'ColfilterModel'
     conf['cf.similarity'] = 'SparseCosineSimilarity'
     conf['vec.isaccum'] = True
-    conf['vec.normalized'] = True
+    conf['vec.normalized'] = False
     sigmahours = [1., 4., 0.25, 12., 24.]
     for simnum in [100, 50, 5]:
         conf['cf.simnum'] = simnum

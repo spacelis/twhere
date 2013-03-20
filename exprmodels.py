@@ -46,7 +46,7 @@ class PredictingMajority(object):
         self.majority = [x[0] for x in self.dist.most_common()]
         self.logger.info('Majority Class: %s' % (self.majority[0],))
 
-    def predict(self, tr, tick): # pylint: disable-msg=W0613
+    def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ predicting the last
         """
         return self.majority
@@ -200,7 +200,7 @@ def print_trail(trail):
 FOLDS = 10
 
 
-def experiment(conf): # pylint: disable-msg=R0914
+def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
     logger = logging.getLogger(__name__)

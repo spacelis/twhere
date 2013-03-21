@@ -208,7 +208,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
     logger.info('--------------------  Experimenting on {0}'.format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))
     data_provider = TextData(conf['expr.city.id'], conf['expr.target'])
-    conf['data.namespace'] = data_provider.get_namespace()
+    conf['data.namespace'] = sorted(data_provider.get_namespace())
     data = data_provider.get_data()
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]

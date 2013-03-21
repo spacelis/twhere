@@ -217,6 +217,8 @@ def experiment(conf):  # pylint: disable-msg=R0914
     total_trails = checkin_trails(data)
     logger.info('Trails in given dataset: {0}'.format(len(total_trails)))
     for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, FOLDS)):
+        if conf['expr.fold_id'] is not None and fold_id != conf['expr.fold_id']:
+            continue
         logger.info('----------  Fold: {0}/{1}'.format(fold_id + 1, FOLDS))
 
         logger.info('Training...')

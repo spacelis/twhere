@@ -30,14 +30,14 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'discounting.params': {'l': 1 / 3600.},
                   'cf.segment': 100,
                   'cf.simnum': 20,
-                  'cf.similarity': 'CosineSimilarity',
+                  'cf.similarity': 'SparseCosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
                   'expr.city.name': 'NY',
                   'expr.city.id': '27485069891a7938',
                   'expr.target': 'category',
                   'expr.model': 'ColfilterModel',
-                  'expr.output': None,
-                  'data.namespace': None,
+                  'expr.output': None,                  # Must be override
+                  'data.namespace': None,               # will be override during data loading phase
                   }
 
 
@@ -75,25 +75,31 @@ class Configuration(object):
         if fname is None:
             fname = str(uuid.uuid1()) + '.tempconf'
         with open(fname, 'w') as fout:
-            json.dump(Configuration.flatten(self.conf), fout)
+            fout.write(json.dumps(Configuration.flatten(self.conf), encoding='utf-8'))
         return fname
 
     def load(self, fname):
         """ Load current configuration with fname
         """
         with open(fname) as fin:
-            self.conf = Configuration.deflatten(json.load(fin))
+            self.conf = Configuration.deflatten(json.loads(fin.read(), encoding='utf-8'))
+
+    def update(self, delta):
+        """ Update the configuration by a delta configuration
+        """
+        self.conf.update(delta)
 
     def __getitem__(self, key):
-        """ Return the property value
-        """
         return self.conf[key]
 
     def __setitem__(self, key, val):
-        """ Set the property of key by val
-        """
         self.conf[key] = val
 
+    def __delitem__(self, key):
+        del self[key]
+
+    def __len__(self):
+        return len(self.conf)
 
 if __name__ == '__main__':
     raise Exception('Should run experiment.py')

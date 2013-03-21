@@ -21,6 +21,7 @@ import itertools
 from pprint import pformat
 import numpy as NP
 from numpy.lib.stride_tricks import as_strided
+from mlmodels.utils.spindex import SparseVector
 
 
 EPSILON = 1e-10
@@ -287,6 +288,11 @@ class Vectorizor(object):
         """
         raise NotImplementedError
 
+    def sp_process(self, trail):
+        """ Processing trails to vectors
+        """
+        raise NotImplementedError
+
     def get_timeslot(self, tick):
         """ return current timeslot the tick belongs to
         """
@@ -361,7 +367,7 @@ class KernelVectorizor(Vectorizor):
                  namespace,
                  kernel='gaussian_pdf',
                  params=(3600,),
-                 accumulated=False,
+                 accumulated=True,
                  normalized=False,
                  **kargs):
         super(KernelVectorizor, self).__init__(namespace, **kargs)
@@ -389,6 +395,23 @@ class KernelVectorizor(Vectorizor):
                    epoch=conf['vec.epoch'],
                    eschatos=conf['vec.eschatos'],
                    timeparser=conf['vec.timeparser'])
+
+    def sp_process(self, trail):
+        """ accumulating gaussian shaped function
+        """
+        spvec = SparseVector([len(self.namespace), self.veclen])
+        rveclist = list()
+        vadd = rveclist.append
+        kadd = spvec.keys.append
+        for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
+            kadd(self.namespace.index(poi))
+            vadd(kernel_smooth(self.axis,
+                               [self.get_seconds(c['tick']) for c in checkins],
+                               self.params,
+                               aggr=self.aggr,
+                               kernel=self.kernel))
+        spvec.rvecs = NP.array(rveclist)
+        return spvec
 
     def process(self, trail, target=None):
         """ accumulating gaussian shaped function

@@ -153,8 +153,9 @@ class ColfilterModel(object):
         """ Train the model
         """
         for _, tr in enumerate(trail_set):
-            vecs = as_doublesegments(self.vectorizor.process(tr), self.seglen)
-            self.model.extend_dataitems(vecs)
+            spvec = self.vectorizor.sp_process(tr)
+            spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
+            self.model.extend_dataitems(spvec)
         self.logger.info('Resource usage: {0}MB'.format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 
     def predict(self, tr, tick):

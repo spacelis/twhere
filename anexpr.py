@@ -10,32 +10,114 @@ Description:
 __version__ = '0.0.1'
 
 
-CONFSTR = """\
+import json
+import argparse
+
+# The folloing string template is used for generating a bash script for running
+# experiments on hadoop where @0 is a place holder for a pre-packaged python
+# evironment while @1 will be replaced by the actual path to the folder of
+# twhere. The pydo lib will use distributed cache for storing local copy of
+# the python env and experiment codes that is why @0 and @1 are used here.
+HADOOP_CONFSTR = """\
 source @0/py27/bin/activate && \
-(cd @1; python twhere/runner2.py -s \
-'{"expr.city.name":"%(city)s","expr.fold_id":%(foldid)d,"expr.output":"%(tmpprefix)s%(output)s","expr.target":"%(target)s"}'; \
-hadoop fs -put %(tmpprefix)s%(output)s %(outdir)s; \
+(cd @1/twhere && python twhere/runner2.py -s \
+'%(jstr)s' && \
+hadoop fs -put %(tmpprefix)s%(output)s %(outdir)s && \
 rm %(tmpprefix)s%(output)s)\
+"""
+
+SERVER_CONFSTR = """\
+(mkdir -p %(dir)s && python twhere/runner2.py -s \
+'%(jstr)s' ) &
 """
 
 CITY = ['NY', 'CH', 'LA', 'SF']
 
-def getscript(city='SF', foldid=0, tmpprefix='/tmp/wl-tudelft-', output='test.out', target='base', outdir='test'):
-    """ print a configuration
-    """
-    conf = locals()
-    return CONFSTR % conf
 
-def get_cityloop(tmpprefix='/tmp/wl-tudelft-', target='base', outdir='test'):
+def print_cityloop_hadoop(conf,
+                          exprname,
+                          tmpprefix='/tmp/wl-tudelft-',
+                          outdir='test'):
     """ loop over city
     """
     for c in CITY:
+        conf['expr.city.name'] = c
         for f in range(10):
-            print getscript(city=c, foldid=f, tmpprefix=tmpprefix, output='%s_%d.res' % (c, f), target=target, outdir=outdir)
+            conf['expr.fold_id'] = f
+            conf['expr.output'] = ''.join([tmpprefix, c, '_',
+                                           exprname, '_', str(f), '.res'])
+            print HADOOP_CONFSTR % {'jstr': json.dumps(conf),
+                                    'tmpprefix': tmpprefix,
+                                    'output': conf['expr.output'],
+                                    'outdir': outdir}
 
 
-def test():
-    print getscript(city='NY')
+def print_cityloop_server(conf, exprname, outdir='test'):
+    """ loop over city
+    """
+    for c in CITY:
+        conf['expr.city.name'] = c
+        for f in range(10):
+            conf['expr.fold_id'] = f
+            conf['expr.output'] = ''.join([outdir, '/', c, '_',
+                                           exprname, '_', str(f)])
+            print SERVER_CONFSTR % {'jstr': json.dumps(conf),
+                                    'dir': outdir}
+
+
+def parse_parameter():
+    """ Parse the argument
+    """
+    parser = argparse.ArgumentParser(description='Scripting experiments')
+    parser.add_argument('-s',
+                        dest='confstr',
+                        action='store',
+                        metavar='JSON',
+                        default=None,
+                        help='Running with the delta configuration '
+                        'from the json string')
+    parser.add_argument('-n',
+                        dest='name',
+                        required=True,
+                        action='store',
+                        default='expr',
+                        metavar='NAME',
+                        help='The name for the experiment')
+    subparsers = parser.add_subparsers(dest='cmd')
+    parser_hadoop = subparsers.add_parser('hadoop')
+    parser_server = subparsers.add_parser('server')
+    parser_hadoop.add_argument('-t', '--tmpprefix',
+                               dest='tmpprefix',
+                               default='/tmp/wl-tudelft-',
+                               help='The the prefix for accessing tmp '
+                               'folder with name')
+    parser_hadoop.add_argument('-o', '--output-dir',
+                               dest='output',
+                               default='test',
+                               help='The folder on HDFS for gathering '
+                               'the result files')
+
+    parser_server.add_argument('-o', '--output-dir',
+                               dest='output',
+                               default='test',
+                               help='The folder on HDFS for gathering '
+                               'the result files')
+    args = parser.parse_args()
+    return args
+
+
+def utility():
+    """ Running this toolkit
+    """
+    args = parse_parameter()
+    if args.confstr is None:
+        conf = dict()
+    else:
+        conf = json.loads(args.confstr)
+    if args.cmd == 'hadoop':
+        print_cityloop_hadoop(conf, args.name, args.tmpprefix, args.output)
+    elif args.cmd == 'server':
+        print_cityloop_server(conf, args.name)
 
 if __name__ == '__main__':
-    get_cityloop()
+    utility()

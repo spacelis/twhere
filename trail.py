@@ -11,13 +11,10 @@ History:
 __version__ = '0.2.0'
 __author__ = 'SpaceLis'
 
-import logging
-logging.basicConfig(format='%(asctime)s %(name)s [%(levelname)s] %(message)s', level=logging.INFO)
-LOGGER = logging.getLogger(__name__)
-
 import math
-from datetime import datetime, timedelta
+import logging
 import itertools
+from datetime import datetime, timedelta
 from pprint import pformat
 import numpy as NP
 from numpy.lib.stride_tricks import as_strided
@@ -216,7 +213,7 @@ def as_doublesegments(vec, seglen, ref=-1):
     """
     poi_num, length = vec.shape
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen - 1  # Frames are non-overlapping sliding windows of segment length
+    segment_num = (length - offset) / seglen - 1  # Frames are half-overlapping sliding windows with segment length difference
     return as_strided(vec,
                       shape=(2, segment_num, poi_num, 2 * seglen),
                       strides=(offset * vec.itemsize,
@@ -274,6 +271,7 @@ class Vectorizor(object):
                  timeparser=None):
 
         super(Vectorizor, self).__init__()
+        self.logger = logging.getLogger(type(self).__name__)
         self.namespace = namespace
         self.unit = unit if isinstance(unit, timedelta) else str2timedelta(unit)
         self.epoch = epoch
@@ -320,7 +318,7 @@ class BinaryVectorizor(Vectorizor):                 # process method is linked i
             self.process = self.process_accum
         else:
             self.process = self.process_binary
-        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+        self.logger.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
 
     @classmethod
     def from_config(cls, conf):
@@ -380,7 +378,7 @@ class KernelVectorizor(Vectorizor):
             self.aggr = NP.add
         else:
             self.aggr = NP.fmax
-        LOGGER.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+        self.logger.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
 
     @classmethod
     def from_config(cls, conf):
@@ -427,7 +425,7 @@ class KernelVectorizor(Vectorizor):
                                         self.params,
                                         aggr=self.aggr,
                                         kernel=self.kernel)
-        NP.add(vec, EPSILON, vec)
+        #NP.add(vec, EPSILON, vec)
         if self.normalized:
             unity = NP.sum(vec, axis=0)
             NP.divide(vec, unity, vec)

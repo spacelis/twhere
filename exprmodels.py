@@ -26,6 +26,7 @@ from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
 from twhere.trail import as_doublesegments
 from twhere.dataprov import TextData
+from twhere.beeper import Beeper
 
 
 class PredictingMajority(object):
@@ -63,7 +64,7 @@ class PredictingTimeMajority(object):
         self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
-        self.dist = NP.zeros((len(self.namespace), self.seglen))
+        self.dist = NP.zeros((len(self.namespace), self.seglen), dtype=NP.int32)
 
     def train(self, trail_set):
         """ Calculate the distribution of visiting location type
@@ -152,10 +153,12 @@ class ColfilterModel(object):
     def train(self, trail_set):
         """ Train the model
         """
+        beeper = Beeper(self.logger, name='Training', deltacnt=100)
         for _, tr in enumerate(trail_set):
             spvec = self.vectorizor.sp_process(tr)
             spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
             self.model.extend_dataitems(spvec)
+            beeper.beep()
         self.logger.info('Resource usage: {0}MB'.format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 
     def predict(self, tr, tick):
@@ -198,15 +201,13 @@ def print_trail(trail):
     print zip(pois, ticks)
 
 
-FOLDS = 10
-
-
 def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
     logger = logging.getLogger(__name__)
     logger.info('--------------------  Experimenting on {0}'.format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))
+
     data_provider = TextData(conf['expr.city.id'], conf['expr.target'])
     conf['data.namespace'] = sorted(data_provider.get_namespace())
     data = data_provider.get_data()
@@ -216,28 +217,30 @@ def experiment(conf):  # pylint: disable-msg=R0914
     logger.info('Predicting {0}'.format(conf['expr.target']))
     total_trails = checkin_trails(data)
     logger.info('Trails in given dataset: {0}'.format(len(total_trails)))
-    for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, FOLDS)):
+    for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, conf['expr.folds'])):
         if conf['expr.fold_id'] is not None and fold_id != conf['expr.fold_id']:
             continue
-        logger.info('----------  Fold: {0}/{1}'.format(fold_id + 1, FOLDS))
 
-        logger.info('Training...')
-        m = model(conf)
         train_tr_set = list(train_tr)
         test_tr_set = list(test_tr)
-        m.train(train_tr_set)
-
+        logger.info('----------  Fold: {0}/{1}'.format(fold_id + 1, conf['expr.folds']))
         logger.info('Checkins: {0} / {1}'.format(sum([len(tr) for tr in test_tr_set]),
                                                  sum([len(tr) for tr in train_tr_set])))
         logger.info('Trails: {0} / {1}'.format(len(test_tr_set), len(train_tr_set)))
-        logger.info('Testing...[Output: {0}]'.format(output.name))
 
-        test_cnt = Counter()
-        for segtrl in iter_test_instance(test_tr_set):
+        logger.info('Training...')
+        m = model(conf)
+        m.train(train_tr_set)
+
+        logger.info('Testing...[Output: {0}]'.format(output.name))
+        statcounter = Counter()
+        beeper = Beeper(logger, name='Testing', deltacnt=100)
+        for segtrl in iter_test_instance(test_tr_set, conf['vec.unit'] * conf['cf.segment']):
             htrl, reftick, refpoi = segtrl[:-1], segtrl[-1]['tick'], segtrl[-1]['poi']
             print >> output, rank_ref(m, htrl, reftick, refpoi)
-            test_cnt.update(['instances'])
-        logger.info('Tested trails: {0}'.format(test_cnt['instances']))
+            statcounter.update(['instances'])
+            beeper.beep()
+        logger.info('Tested trails: {0}'.format(statcounter['instances']))
 
 
 if __name__ == '__main__':

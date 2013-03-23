@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'expr.target': 'category',
                   'expr.model': 'ColfilterModel',
                   'expr.output': None,                  # Must be override
+                  'expr.folds': 10,
                   'expr.fold_id': None,                 # None for running all folds
                   'data.namespace': None,               # will be override during data loading phase
                   }

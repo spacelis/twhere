@@ -34,7 +34,7 @@ class PredictingMajority(object):
     """
     def __init__(self, conf):
         super(PredictingMajority, self).__init__()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.dist = Counter(self.namespace)
         self.majority = None
@@ -58,7 +58,7 @@ class PredictingTimeMajority(object):
     """
     def __init__(self, conf):
         super(PredictingTimeMajority, self).__init__()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.seglen = conf['cf.segment']
         self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
@@ -88,7 +88,7 @@ class PredictingLast(object):
     """
     def __init__(self, conf):
         super(PredictingLast, self).__init__()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
 
     def train(self, trail_set):
@@ -111,7 +111,7 @@ class MarkovChainModel(object):
     """
     def __init__(self, conf):
         super(MarkovChainModel, self).__init__()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.model = MarkovModel(self.namespace)
 
@@ -139,7 +139,7 @@ class ColfilterModel(object):
                 conf -- a dict-like object holding configurations
         """
         super(ColfilterModel, self).__init__()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.seglen = conf['cf.segment']
         self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
@@ -204,7 +204,7 @@ def print_trail(trail):
 def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('%s.%s' % (__name__, 'experiment'))
     logger.info('--------------------  Experimenting on {0}'.format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))
 

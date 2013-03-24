@@ -271,7 +271,7 @@ class Vectorizor(object):
                  timeparser=None):
 
         super(Vectorizor, self).__init__()
-        self.logger = logging.getLogger(type(self).__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
         self.namespace = namespace
         self.unit = unit if isinstance(unit, timedelta) else str2timedelta(unit)
         self.epoch = epoch

@@ -21,7 +21,7 @@ class DataProvider(object):
     """
     def __init__(self):
         super(DataProvider, self).__init__()
-        self.logger = logging.getLogger(type(self).__name__)
+        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
 
     def get_namespace(self):
         """ Return the list of unique labels in poicol

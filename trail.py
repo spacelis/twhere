@@ -425,8 +425,8 @@ class KernelVectorizor(Vectorizor):
                                         self.params,
                                         aggr=self.aggr,
                                         kernel=self.kernel)
-        #NP.add(vec, EPSILON, vec)
         if self.normalized:
+            NP.add(vec, EPSILON, vec)  # make sure not divided by zero
             unity = NP.sum(vec, axis=0)
             NP.divide(vec, unity, vec)
         return vec

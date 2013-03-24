@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'cf.aggregator': 'LinearCombination',
                   'expr.city.name': 'NY',
                   'expr.city.id': '27485069891a7938',
-                  'expr.target': 'category',
+                  'expr.target': 'base',
                   'expr.model': 'ColfilterModel',
                   'expr.output': None,                  # Must be override
                   'expr.folds': 10,

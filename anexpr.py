@@ -12,6 +12,8 @@ __version__ = '0.0.1'
 
 import json
 import argparse
+from twhere.config import DEFAULT_CONFIG
+from pprint import pformat
 
 # The folloing string template is used for generating a bash script for running
 # experiments on hadoop where @0 is a place holder for a pre-packaged python
@@ -28,7 +30,7 @@ rm %(tmpprefix)s%(output)s)\
 
 SERVER_CONFSTR = """\
 (mkdir -p %(dir)s && python twhere/runner2.py -s \
-'%(jstr)s' ) &
+'%(jstr)s' ) &\
 """
 
 CITY = ['NY', 'CH', 'LA', 'SF']
@@ -60,7 +62,7 @@ def print_cityloop_server(conf, exprname, outdir='test'):
         for f in range(10):
             conf['expr.fold_id'] = f
             conf['expr.output'] = ''.join([outdir, '/', c, '_',
-                                           exprname, '_', str(f)])
+                                           exprname, '_', str(f), '.res'])
             print SERVER_CONFSTR % {'jstr': json.dumps(conf),
                                     'dir': outdir}
 
@@ -68,7 +70,10 @@ def print_cityloop_server(conf, exprname, outdir='test'):
 def parse_parameter():
     """ Parse the argument
     """
-    parser = argparse.ArgumentParser(description='Scripting experiments')
+    parser = argparse.ArgumentParser(
+        description='Scripting experiments',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='Default Configuration:\n' + pformat(DEFAULT_CONFIG))
     parser.add_argument('-s',
                         dest='confstr',
                         action='store',
@@ -110,6 +115,7 @@ def utility():
     """ Running this toolkit
     """
     args = parse_parameter()
+    print args.confstr
     if args.confstr is None:
         conf = dict()
     else:

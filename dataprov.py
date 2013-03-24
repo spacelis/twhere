@@ -12,19 +12,34 @@ __version__ = '0.0.1'
 
 
 import logging
-LOGGER = logging.getLogger(__name__)
-
 from datetime import datetime, date, timedelta
 import numpy as NP
 
 
-class MySQLData(object):
+class DataProvider(object):
+    """ Providing data
+    """
+    def __init__(self):
+        super(DataProvider, self).__init__()
+        self.logger = logging.getLogger(type(self).__name__)
+
+    def get_namespace(self):
+        """ Return the list of unique labels in poicol
+        """
+        return self.namespace
+
+    def get_data(self):
+        """ Return a list of checkins
+        """
+        return self.data
+
+class MySQLData(DataProvider):
     """ Data provide from MySQL
     """
     def __init__(self, city, poicol):
         super(MySQLData, self).__init__()
         import MySQLdb as sql
-        LOGGER.info('Using MySQL data provider')
+        self.logger.info('Using MySQL data provider')
         self.city, self.poicol = city, poicol
         if self.poicol == 'base':
             idname = 'base'
@@ -50,28 +65,18 @@ class MySQLData(object):
                                 where c.isbot is null and p.city='%s'
                                 order by c.uid, c.created_at''' %
                             (colname, 'checkins_6', self.city))
-        LOGGER.info('Total Checkins: %d' % (total, ))
+        self.logger.info('Total Checkins: %d' % (total, ))
         self.data = list(cur)
 
-    def get_namespace(self):
-        """ Return the list of unique labels in poicol
-        """
-        return self.namespace
 
-    def get_data(self):
-        """ Return a list of checkins
-        """
-        return self.data
-
-
-class TextData(object):
+class TextData(DataProvider):
     """ Data provider from text files
     """
     def __init__(self, datafile, nsfile):
         super(TextData, self).__init__()
         datapath = 'data/%s_%s_data.table' % (datafile, nsfile)
         nspath = 'data/%s_ns.table' % (nsfile,)
-        LOGGER.info('Text data provider: ' + datapath + ', ' + nspath)
+        self.logger.info('Text data provider: ' + datapath + ', ' + nspath)
         self.data = list()
         self.namespace = list()
         with open(datapath) as fin:
@@ -83,24 +88,14 @@ class TextData(object):
             for line in fin:
                 self.namespace.append(line.strip())
 
-    def get_namespace(self):
-        """ Return a list of unique labels in the predicting field
-        """
-        return self.namespace
 
-    def get_data(self):
-        """ Return a list of checkins
-        """
-        return self.data
-
-
-class RandomData(object):
+class RandomData(DataProvider):
     """ Data provider from text files
     """
     def __init__(self, nsfile, length=3, number=3000):
         super(RandomData, self).__init__()
         nspath = 'data/%s_ns.table' % (nsfile,)
-        LOGGER.info('Random data provider: length=' + str(length) + ', ' + nspath)
+        self.logger.info('Random data provider: length=' + str(length) + ', ' + nspath)
         self.namespace = list()
         with open(nspath) as fin:
             for line in fin:
@@ -117,13 +112,3 @@ class RandomData(object):
                 pid = str(NP.random.randint(10000))
                 tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'), 'pid': pid}
                 self.data.append(tmp)
-
-    def get_namespace(self):
-        """ Return a list of unique labels in the predicting field
-        """
-        return self.namespace
-
-    def get_data(self):
-        """ Return a list of checkins
-        """
-        return self.data

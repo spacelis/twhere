@@ -30,7 +30,7 @@ rm %(tmpprefix)s%(output)s)\
 
 SERVER_CONFSTR = """\
 (mkdir -p %(dir)s && python twhere/runner2.py -s \
-'%(jstr)s' ) &\
+'%(jstr)s' 2> %(log)s) &\
 """
 
 CITY = ['NY', 'CH', 'LA', 'SF']
@@ -64,7 +64,8 @@ def print_cityloop_server(conf, exprname, outdir='test'):
             conf['expr.output'] = ''.join([outdir, '/', c, '_',
                                            exprname, '_', str(f), '.res'])
             print SERVER_CONFSTR % {'jstr': json.dumps(conf),
-                                    'dir': outdir}
+                                    'dir': outdir,
+                                    'log': conf['expr.output'] + '.log'}
 
 
 def parse_parameter():
@@ -115,7 +116,6 @@ def utility():
     """ Running this toolkit
     """
     args = parse_parameter()
-    print args.confstr
     if args.confstr is None:
         conf = dict()
     else:

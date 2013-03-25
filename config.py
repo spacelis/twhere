@@ -35,11 +35,11 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'expr.city.name': 'NY',
                   'expr.city.id': '27485069891a7938',
                   'expr.target': 'base',
-                  'expr.model': 'ColfilterModel',
-                  'expr.output': None,                  # Must be override
+                  'expr.model': 'SparseColfilterModel',
+                  'expr.output': None,    # Must be override
                   'expr.folds': 10,
-                  'expr.fold_id': None,                 # None for running all folds
-                  'data.namespace': None,               # will be override during data loading phase
+                  'expr.fold_id': None,   # None for running all folds
+                  'data.namespace': None  # overrided during data loading phase
                   }
 
 
@@ -77,14 +77,16 @@ class Configuration(object):
         if fname is None:
             fname = str(uuid.uuid1()) + '.tempconf'
         with open(fname, 'w') as fout:
-            fout.write(json.dumps(Configuration.flatten(self.conf), encoding='utf-8'))
+            fout.write(json.dumps(
+                Configuration.flatten(self.conf), encoding='utf-8'))
         return fname
 
     def load(self, fname):
         """ Load current configuration with fname
         """
         with open(fname) as fin:
-            self.conf = Configuration.deflatten(json.loads(fin.read(), encoding='utf-8'))
+            self.conf = Configuration.deflatten(
+                json.loads(fin.read(), encoding='utf-8'))
 
     def update(self, delta):
         """ Update the configuration by a delta configuration

@@ -23,14 +23,17 @@ from mlmodels.utils.spindex import SparseVector
 
 EPSILON = 1e-10
 
-# ----------------------------------------------------------------------------------------------------
+
+# ---------------------------------------------
 # KERNELS
 #
 def gaussian_pdf(axis, mu, params):
-    """ Generate a sample of Gaussian distribution (mu, ss) in interval with veclen samples
+    """ Generate a sample of Gaussian distribution (mu, ss) in interval with
+        veclen samples
 
         Arguments:
-            axis -- a vector of x coordinates each element of which is a sample point
+            axis -- a vector of x coordinates each element of which is a sample
+                    point
             mu -- a float indication the mean of Gaussian distribution
             sigma -- a float indicating the sigma of Gaussian distribution
     """
@@ -39,11 +42,12 @@ def gaussian_pdf(axis, mu, params):
     return NP.exp(-NP.square(s))
 
 
-def uniform_pdf(axis, mu, params):  #  mu is a compromise to the interface pylint: disable-msg=W0613
+def uniform_pdf(axis, mu, params):  # interface pylint: disable-msg=W0613
     """ Generate a sample of uniform distribution
 
         Arguments:
-            axis -- a vector of x coordinates each element of which is a sample point
+            axis -- a vector of x coordinates each element of which is a sample
+                    point
             mu -- a float indication the mean of Gaussian distribution
             sigma -- a float indicating the sigma of Gaussian distribution
     """
@@ -56,8 +60,10 @@ def kernel_smooth(axis, mus, params, aggr=NP.add, kernel=gaussian_pdf):
         Arguments:
             mus -- a set of mus
             params -- the parameters for kernels, e.g., sigma for Gaussian
-            axis -- a vector of x coordinates each element of which is a sample point
-            aggr -- the aggragation method to be used for the set of Gaussian distribution. Default=NP.add
+            axis -- a vector of x coordinates each element of which is a sample
+                    point
+            aggr -- the aggragation method to be used for the set of Gaussian
+                    distribution. Default=NP.add
             kernel -- name of kernel distribution to use for smoothing
     """
     vec = NP.zeros_like(axis)
@@ -70,7 +76,8 @@ def checkin_trails(seq, key=lambda x: x['trail_id']):
     """ A generating function for trails
 
         Arguments:
-            seq -- a sequence of check-ins interpreted as a dict() containing at least a key of 'trail_id'
+            seq -- a sequence of check-ins interpreted as a dict() containing
+                   at least a key of 'trail_id'
     """
     return [list(cks) for _, cks in itertools.groupby(seq, key=key)]
 
@@ -94,7 +101,8 @@ def diff_last_filter(trails, key=lambda x: x['pid']):
 def diff_all_filter(trails, key=lambda x: x['pid']):
     """ Filter out trails with last key appeared before
     """
-    return itertools.ifilter(lambda x: key(x[-1]) not in set([key(c) for c in x]), trails)
+    keyfunc = lambda x: key(x[-1]) not in set([key(c) for c in x])
+    return itertools.ifilter(keyfunc, trails)
 
 
 def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
@@ -111,12 +119,13 @@ def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
 #
 
 class TrailVectorSegmentSet(object):
-    """ Cutting vectorized trails in to segments along time dimension according to given reference point.
+    """ Cutting vectorized trails in to segments along time dimension according
+        to given reference point.
     """
     def __init__(self, data, seglen=100):
         """ Create a view as a vector of trail segments.
         Each element is a matrix of time [(of the given seglen) x user x poi].
-        For example, as_segments([A, B, C, D, E], 3) == [[A, B, C], [B, C, D], [C, D, E])
+        Ex. as_segments([A,B,C,D,E],3)==[[A,B,C],[B,C,D],[C,D,E])
 
             Arguments:
                 data -- a 3D NP.array() [time, user, poi]
@@ -125,21 +134,26 @@ class TrailVectorSegmentSet(object):
             Return:
                 a 5d array [offset, seg, time, user, poi]
         """
-        assert len(data.shape) == 3, 'Trails must be stored as [time] * [user] * [poi]'
+        assert len(data.shape) == 3, 'Should be [time x user x poi]'
         super(TrailVectorSegmentSet, self).__init__()
         self.length, self.user_num, self.poi_num = data.shape
         self.seglen = seglen
 
-        self.frame_num = self.length - self.seglen + 1  # Frames are sliding windows of segment length
+        # Frames are sliding windows of segment length
+        self.frame_num = self.length - self.seglen + 1
         self.snapshot_bytesize = self.user_num * self.poi_num * data.itemsize
-        self.segsets = as_strided(data,
-                                  shape=(self.frame_num, seglen, self.user_num, self.poi_num),
-                                  strides=(self.snapshot_bytesize, self.snapshot_bytesize, self.poi_num * data.itemsize, data.itemsize))
+        newshape = (self.frame_num, seglen, self.user_num, self.poi_num)
+        newstrides = (self.snapshot_bytesize,
+                      self.snapshot_bytesize,
+                      self.poi_num * data.itemsize,
+                      data.itemsize)
+        self.segsets = as_strided(data, shape=newshape, strides=newstrides)
 
     def enumerate_segment_sets(self, refslot):
         """ Enumerating segment sets according to reference point
         """
-        for i in NP.arange((refslot + 1) % self.seglen, refslot, self.seglen):  # including the refslot point as the last time point in a segment
+        # including the refslot point as the last time point in a segment
+        for i in NP.arange((refslot + 1) % self.seglen, refslot, self.seglen):
             yield i, self.segsets[i]
 
     def enumerate_segments(self, refslot):
@@ -164,12 +178,14 @@ def as_vector_segments(data, ref, seglen):
     user_num, poi_num, length = data.shape
 
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen  # Frames are non-overlapping sliding windows of segment length, because they are decided on-the-fly of prediction
+    # Frames are non-overlapping sliding windows of segment length, because
+    # they are decided on-the-fly of prediction
+    segment_num = (length - offset) / seglen
     longtrail_bytesize = poi_num * length * data.itemsize
     return as_strided(data,
                       shape=(user_num, segment_num, 2, poi_num, seglen),
                       strides=(longtrail_bytesize,
-                               seglen * data.itemsize, # shoundn't this be (seglen * poi_num * data.itemsize)
+                               seglen * data.itemsize,
                                offset * data.itemsize,
                                length * data.itemsize,
                                data.itemsize))[:, :, 1, :, :]
@@ -191,7 +207,8 @@ def as_segments(vec, seglen, ref=-1):
     """
     poi_num, length = vec.shape
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen  # Frames are non-overlapping sliding windows of segment length
+    # Frames are non-overlapping sliding windows of segment length
+    segment_num = (length - offset) / seglen
     return as_strided(vec,
                       shape=(2, segment_num, poi_num, seglen),
                       strides=(offset * vec.itemsize,
@@ -213,7 +230,9 @@ def as_doublesegments(vec, seglen, ref=-1):
     """
     poi_num, length = vec.shape
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen - 1  # Frames are half-overlapping sliding windows with segment length difference
+    # Frames are half-overlapping sliding windows with segment length
+    # difference
+    segment_num = (length - offset) / seglen - 1
     return as_strided(vec,
                       shape=(2, segment_num, poi_num, 2 * seglen),
                       strides=(offset * vec.itemsize,
@@ -228,7 +247,8 @@ def as_mask(data, ref, seglen, level=1):
     user_num, length = data.shape
 
     offset = ((ref + 1) % seglen)
-    segment_num = (length - offset) / seglen  # Frames are sliding windows of segment length
+    # Frames are sliding windows of segment length
+    segment_num = (length - offset) / seglen
     longtrail_bytesize = length * data.itemsize
     segs = as_strided(data,
                       shape=(user_num, segment_num, 2, seglen),
@@ -263,7 +283,7 @@ def str2timedelta(s):
 class Vectorizor(object):
     """ Make trail into vectors
     """
-    def __init__(self,                       #  all argumnets are required pylint: disable-msg=R0913
+    def __init__(self,  # all argumnets are required pylint: disable-msg=R0913
                  namespace,
                  unit=timedelta(seconds=24 * 36),
                  epoch=datetime(2010, 6, 1),
@@ -271,9 +291,13 @@ class Vectorizor(object):
                  timeparser=None):
 
         super(Vectorizor, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = namespace
-        self.unit = unit if isinstance(unit, timedelta) else str2timedelta(unit)
+        if isinstance(unit, timedelta):
+            self.unit = unit
+        else:
+            self.unit = str2timedelta(unit)
         self.epoch = epoch
         self.eschatos = eschatos
 
@@ -303,13 +327,17 @@ class Vectorizor(object):
 
     def __str__(self):
         attrs = [(k, repr(getattr(self, k))) for k in dir(self)]
-        attrs = [(k, v) for k, v in attrs if not (k.startswith('_') or hasattr(getattr(self, k), 'im_self'))]
-        attrs = [(k, v) if len(v) < 50 else (k, v[:47] + '...') for k, v in attrs]
+        attrs = [(k, v) for k, v in attrs if not k.startswith('_')]
+        attrs = [(k, v) for k, v in attrs
+                 if not hasattr(getattr(self, k), 'im_self')]
+        attrs = [(k, v) if len(v) < 50
+                 else (k, v[:47] + '...') for k, v in attrs]
         return pformat(dict(attrs))
 
 
-class BinaryVectorizor(Vectorizor):                 # process method is linked in __init__ pylint: disable-msg=W0223
-    """ Vectorizing trail as a 0-1 string each element of which indicates the presence of user at a location (type)
+class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
+    """ Vectorizing trail as a 0-1 string each element of which indicates the
+        presence of user at a location (type)
     """
     def __init__(self, namespace, accumulated=True, **kargs):
 
@@ -337,7 +365,8 @@ class BinaryVectorizor(Vectorizor):                 # process method is linked i
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
+            vec = NP.zeros((len(self.namespace), self.veclen),
+                           dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
@@ -350,7 +379,8 @@ class BinaryVectorizor(Vectorizor):                 # process method is linked i
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
+            vec = NP.zeros((len(self.namespace), self.veclen),
+                           dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
@@ -361,7 +391,7 @@ class BinaryVectorizor(Vectorizor):                 # process method is linked i
 class KernelVectorizor(Vectorizor):
     """ Using Gaussian shaped functions to model the likelihood of staying
     """
-    def __init__(self,                        #  all argumnets are required pylint: disable-msg=R0913
+    def __init__(self,  # pylint: disable-msg=R0913
                  namespace,
                  kernel='gaussian_pdf',
                  params=(3600,),
@@ -373,7 +403,10 @@ class KernelVectorizor(Vectorizor):
         self.params = params
         self.normalized = normalized
         self.interval = (0, (self.eschatos - self.epoch).total_seconds())
-        self.axis = NP.linspace(*self.interval, num=self.veclen, endpoint=False)
+        self.axis = NP.linspace(self.interval[0],
+                                self.interval[1],
+                                num=self.veclen,
+                                endpoint=False)
         if accumulated:
             self.aggr = NP.add
         else:
@@ -401,7 +434,10 @@ class KernelVectorizor(Vectorizor):
         rveclist = list()
         vadd = rveclist.append
         kadd = spvec.keys.append
-        for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
+        sortkey = lambda x: self.namespace.index(x['poi'])
+        groupkey = lambda x: x['poi']
+        sortedtrail = sorted(trail, key=sortkey)
+        for poi, checkins in itertools.groupby(sortedtrail, key=groupkey):
             kadd(self.namespace.index(poi))
             vadd(kernel_smooth(self.axis,
                                [self.get_seconds(c['tick']) for c in checkins],
@@ -417,16 +453,21 @@ class KernelVectorizor(Vectorizor):
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((len(self.namespace), self.veclen), dtype=NP.float32)
-        for poi, checkins in itertools.groupby(sorted(trail, key=lambda x: x['poi']), key=lambda x: x['poi']):
+            vec = NP.zeros((len(self.namespace), self.veclen),
+                           dtype=NP.float32)
+        sortkey = lambda x: self.namespace.index(x['poi'])
+        groupkey = lambda x: x['poi']
+        sortedtrail = sorted(trail, key=sortkey)
+        for poi, checkins in itertools.groupby(sortedtrail, key=groupkey):
             idx = self.namespace.index(poi)
+            ticks = [self.get_seconds(c['tick']) for c in checkins]
             vec[idx, :] = kernel_smooth(self.axis,
-                                        [self.get_seconds(c['tick']) for c in checkins],
+                                        ticks,
                                         self.params,
                                         aggr=self.aggr,
                                         kernel=self.kernel)
+        NP.add(vec, EPSILON, vec)  # make sure not divided by zero
         if self.normalized:
-            NP.add(vec, EPSILON, vec)  # make sure not divided by zero
             unity = NP.sum(vec, axis=0)
             NP.divide(vec, unity, vec)
         return vec
@@ -434,4 +475,6 @@ class KernelVectorizor(Vectorizor):
     def get_timeslot(self, t):
         """ Return the timeslot
         """
-        return self.axis.searchsorted(self.get_seconds(t)) - 1  # axis is an array of sample points pylint: disable-msg=E1103
+        # axis is an array of sample points
+        # pylint: disable-msg=E1103
+        return self.axis.searchsorted(self.get_seconds(t)) - 1

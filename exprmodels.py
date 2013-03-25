@@ -21,10 +21,13 @@ NP.seterr(all='warn', under='ignore')
 
 from mlmodels.experiment.crossvalid import folds
 from mlmodels.model.colfilter import SparseVectorDatabase
+from mlmodels.model.colfilter import VectorDatabase
 from mlmodels.model.mm import MarkovModel
 from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
 from twhere.trail import as_doublesegments
+from twhere.trail import as_mask
+from twhere.trail import as_vector_segments
 from twhere.dataprov import TextData
 from twhere.beeper import Beeper
 
@@ -34,7 +37,8 @@ class PredictingMajority(object):
     """
     def __init__(self, conf):
         super(PredictingMajority, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.dist = Counter(self.namespace)
         self.majority = None
@@ -58,13 +62,17 @@ class PredictingTimeMajority(object):
     """
     def __init__(self, conf):
         super(PredictingTimeMajority, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.seglen = conf['cf.segment']
-        self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
+        self.mapping = dict(
+            [(poi, idx) for idx, poi in enumerate(self.namespace)]
+        ).get
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
-        self.dist = NP.zeros((len(self.namespace), self.seglen), dtype=NP.int32)
+        self.dist = NP.zeros(
+            (len(self.namespace), self.seglen), dtype=NP.int32)
 
     def train(self, trail_set):
         """ Calculate the distribution of visiting location type
@@ -78,8 +86,9 @@ class PredictingTimeMajority(object):
     def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ predicting the last
         """
+        t = self.vectorizor.get_timeslot(tick) % self.seglen
         return sorted(self.namespace,
-                      key=lambda x: self.dist[self.mapping(x), self.vectorizor.get_timeslot(tick) % self.seglen],
+                      key=lambda x: self.dist[self.mapping(x), t],
                       reverse=True)
 
 
@@ -88,7 +97,8 @@ class PredictingLast(object):
     """
     def __init__(self, conf):
         super(PredictingLast, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
 
     def train(self, trail_set):
@@ -111,7 +121,8 @@ class MarkovChainModel(object):
     """
     def __init__(self, conf):
         super(MarkovChainModel, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.model = MarkovModel(self.namespace)
 
@@ -139,10 +150,70 @@ class ColfilterModel(object):
                 conf -- a dict-like object holding configurations
         """
         super(ColfilterModel, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
         self.seglen = conf['cf.segment']
-        self.mapping = dict([(poi, idx) for idx, poi in enumerate(self.namespace)]).get
+        self.mapping = dict([(poi, idx) for idx, poi in
+                             enumerate(self.namespace)]).get
+
+        # Prepare model with kernel specification
+        self.vectorizor = KernelVectorizor.from_config(conf)
+        self.model = VectorDatabase.from_config(conf)
+        self.vecs = None
+        self.ck_cnt = None
+
+    def train(self, trail_set):
+        """ Train the model
+        """
+        self.vecs = NP.zeros((len(trail_set), len(self.namespace),
+                              self.vectorizor.veclen), dtype=NP.float32)
+        self.ck_cnt = NP.zeros((len(trail_set), self.vectorizor.veclen),
+                               dtype=NP.byte)
+        for idx, tr in enumerate(trail_set):
+            self.vecs[idx, :, :] = self.vectorizor.process(tr)
+            for c in tr:
+                tick = self.vectorizor.get_timeslot(c['tick'])
+                self.ck_cnt[idx, tick] += 1 \
+                    if self.ck_cnt[idx, tick] < 200 else 0
+        self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(
+            self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
+
+        zeros = NP.sum(self.vecs > 0.01)
+        self.logger.info('Sparsity: {0} / {1} = {2}'.format(
+            zeros, self.vecs.size, float(zeros) / self.vecs.size))
+
+    def predict(self, tr, tick):
+        """ Predicting with colfilter model
+        """
+        t = self.vectorizor.get_timeslot(tick)
+        vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
+
+        self.model.load_data(as_vector_segments(self.vecs, t, self.seglen))
+        mask = as_mask(self.ck_cnt, t, self.seglen)
+        est = self.model.estimates_with_mask(vec, t, mask)
+        rank = sorted(self.namespace,
+                      key=lambda x: est[self.mapping(x), -1],
+                      reverse=True)
+        return rank
+
+
+class SparseColfilterModel(object):
+    """ Using cofilter with vectorized trail_set
+    """
+    def __init__(self, conf):
+        """ Constructor
+
+            Arguments:
+                conf -- a dict-like object holding configurations
+        """
+        super(SparseColfilterModel, self).__init__()
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
+        self.namespace = conf['data.namespace']
+        self.seglen = conf['cf.segment']
+        self.mapping = dict([(poi, idx)
+                             for idx, poi in enumerate(self.namespace)]).get
 
         # Prepare model with kernel specification
         self.vectorizor = KernelVectorizor.from_config(conf)
@@ -159,7 +230,8 @@ class ColfilterModel(object):
             spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
             self.model.extend_dataitems(spvec)
             beeper.beep()
-        self.logger.info('Resource usage: {0}MB'.format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
+        self.logger.info('Resource usage: {0}MB'.format(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 
     def predict(self, tr, tick):
         """ Predicting with colfilter model
@@ -168,7 +240,9 @@ class ColfilterModel(object):
         vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
 
         est = self.model.estimates(vec, t)
-        rank = sorted(self.namespace, key=lambda x: est[self.mapping(x), -1], reverse=True)
+        rank = sorted(self.namespace,
+                      key=lambda x: est[self.mapping(x), -1],
+                      reverse=True)
         return rank
 
 
@@ -205,28 +279,34 @@ def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
     logger = logging.getLogger('%s.%s' % (__name__, 'experiment'))
-    logger.info('--------------------  Experimenting on {0}'.format(conf['expr.city.name']))
+    logger.info('--------------------  Experimenting on {0}'
+                .format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))
 
     data_provider = TextData(conf['expr.city.id'], conf['expr.target'])
-    conf['data.namespace'] = sorted(data_provider.get_namespace())
+    conf['data.namespace'] = data_provider.get_namespace()
     data = data_provider.get_data()
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
+    total_trails = checkin_trails(data)
+    numfold = conf['expr.folds']
+    segperiod = conf['vec.unit'] * conf['cf.segment']
 
     logger.info('Predicting {0}'.format(conf['expr.target']))
-    total_trails = checkin_trails(data)
     logger.info('Trails in given dataset: {0}'.format(len(total_trails)))
-    for fold_id, (test_tr, train_tr) in enumerate(folds(total_trails, conf['expr.folds'])):
-        if conf['expr.fold_id'] is not None and fold_id != conf['expr.fold_id']:
+    for fid, (test_tr, train_tr) in enumerate(folds(total_trails, numfold)):
+        if conf['expr.fold_id'] is not None and fid != conf['expr.fold_id']:
             continue
 
         train_tr_set = list(train_tr)
         test_tr_set = list(test_tr)
-        logger.info('----------  Fold: {0}/{1}'.format(fold_id + 1, conf['expr.folds']))
-        logger.info('Checkins: {0} / {1}'.format(sum([len(tr) for tr in test_tr_set]),
-                                                 sum([len(tr) for tr in train_tr_set])))
-        logger.info('Trails: {0} / {1}'.format(len(test_tr_set), len(train_tr_set)))
+        logger.info('----------  Fold: {0}/{1}'
+                    .format(fid + 1, conf['expr.folds']))
+        logger.info('Checkins: {0} / {1}'
+                    .format(sum([len(tr) for tr in test_tr_set]),
+                            sum([len(tr) for tr in train_tr_set])))
+        logger.info('Trails: {0} / {1}'.
+                    format(len(test_tr_set), len(train_tr_set)))
 
         logger.info('Training...')
         m = model(conf)
@@ -235,11 +315,15 @@ def experiment(conf):  # pylint: disable-msg=R0914
         logger.info('Testing...[Output: {0}]'.format(output.name))
         statcounter = Counter()
         beeper = Beeper(logger, name='Testing', deltacnt=100)
-        for segtrl in iter_test_instance(test_tr_set, conf['vec.unit'] * conf['cf.segment']):
-            htrl, reftick, refpoi = segtrl[:-1], segtrl[-1]['tick'], segtrl[-1]['poi']
+        for segtrl in iter_test_instance(test_tr_set, segperiod):
+            htrl = segtrl[:-1]
+            reftick = segtrl[-1]['tick']
+            refpoi = segtrl[-1]['poi']
+
             print >> output, rank_ref(m, htrl, reftick, refpoi)
             statcounter.update(['instances'])
             beeper.beep()
+
         logger.info('Tested trails: {0}'.format(statcounter['instances']))
 
 

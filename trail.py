@@ -256,7 +256,7 @@ def as_mask(data, ref, seglen, level=1):
                                seglen * data.itemsize,
                                offset * data.itemsize,
                                data.itemsize))[:, :, 1, :]
-    return (NP.sum(segs, axis=2) > level)
+    return (NP.sum(segs, axis=2) >= level)
 
 
 # -------------------------------------------------
@@ -430,6 +430,7 @@ class KernelVectorizor(Vectorizor):
     def sp_process(self, trail):
         """ accumulating gaussian shaped function
         """
+        assert not self.normalized, 'Not applicable on sparse vectors'
         spvec = SparseVector([len(self.namespace), self.veclen])
         rveclist = list()
         vadd = rveclist.append
@@ -439,12 +440,14 @@ class KernelVectorizor(Vectorizor):
         sortedtrail = sorted(trail, key=sortkey)
         for poi, checkins in itertools.groupby(sortedtrail, key=groupkey):
             kadd(self.namespace.index(poi))
+            ticks = [self.get_seconds(c['tick']) for c in checkins]
             vadd(kernel_smooth(self.axis,
-                               [self.get_seconds(c['tick']) for c in checkins],
+                               ticks,
                                self.params,
                                aggr=self.aggr,
                                kernel=self.kernel))
-        spvec.rvecs = NP.array(rveclist)
+        spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
+        NP.add(spvec.rvecs, EPSILON, spvec.rvecs)  # insure not divided by zero
         return spvec
 
     def process(self, trail, target=None):

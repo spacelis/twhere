@@ -186,7 +186,7 @@ class ColfilterModel(object):
         vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
 
         self.model.load_data(as_vector_segments(self.vecs, t, self.seglen))
-        mask = as_mask(self.ck_cnt, t, self.seglen)
+        mask = as_mask(self.ck_cnt, t, self.seglen, level=2)
         est = self.model.estimates_with_mask(vec, t, mask)
         rank = sorted(self.namespace,
                       key=lambda x: est[self.mapping(x), -1],

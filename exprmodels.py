@@ -179,10 +179,6 @@ class ColfilterModel(object):
         self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(
             self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
 
-        zeros = NP.sum(self.vecs > 0.01)
-        self.logger.info('Sparsity: {0} / {1} = {2}'.format(
-            zeros, self.vecs.size, float(zeros) / self.vecs.size))
-
     def predict(self, tr, tick):
         """ Predicting with colfilter model
         """

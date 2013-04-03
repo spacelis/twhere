@@ -91,13 +91,17 @@ class Configuration(object):
     def update(self, delta):
         """ Update the configuration by a delta configuration
         """
-        self.conf.update(delta)
+        for k, v in delta.iteritems():
+            self[k] = v
 
     def __getitem__(self, key):
         return self.conf[key]
 
     def __setitem__(self, key, val):
-        self.conf[key] = val
+        if key in self.conf:
+            self.conf[key] = val
+        else:
+            raise ValueError('%s doesn\'t exist.' % (key,))
 
     def __delitem__(self, key):
         del self[key]

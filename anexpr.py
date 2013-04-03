@@ -26,7 +26,7 @@ HADOOP_CONFSTR = """\
 source @0/py27/bin/activate && \
 (cd @1/twhere && python twhere/runner2.py -s \
 '%(jstr)s' && \
-hadoop fs -put %(tmpprefix)s%(output)s %(outdir)s && \
+hadoop fs -put %(output)s %(outdir)s && \
 rm %(output)s)\
 """
 
@@ -34,7 +34,7 @@ HADOOP_OPT_PY27_CONFSTR = """\
 source @0/opt_py27/opt_envs && \
 (cd @1/twhere && python twhere/runner2.py -s \
 '%(jstr)s' && \
-hadoop fs -put %(tmpprefix)s%(output)s %(outdir)s && \
+hadoop fs -put %(output)s %(outdir)s && \
 rm %(output)s)\
 """
 

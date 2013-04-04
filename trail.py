@@ -22,6 +22,7 @@ from mlmodels.utils.spindex import SparseVector
 
 
 EPSILON = 1e-10
+SQRTBIPI = NP.sqrt(2 * NP.pi)
 
 
 # ---------------------------------------------
@@ -40,6 +41,21 @@ def gaussian_pdf(axis, mu, params):
     (sigma,) = params
     s = (axis - mu) / sigma
     return NP.exp(-NP.square(s))
+
+
+def gaussian2_pdf(axis, mu, params):
+    """ Generate a sample of Gaussian distribution (mu, ss) in interval with
+        veclen samples
+
+        Arguments:
+            axis -- a vector of x coordinates each element of which is a sample
+                    point
+            mu -- a float indication the mean of Gaussian distribution
+            sigma -- a float indicating the sigma of Gaussian distribution
+    """
+    (sigma,) = params
+    s = (axis - mu) / sigma
+    return NP.exp(-NP.square(s) * 0.5) / (SQRTBIPI * sigma)
 
 
 def uniform_pdf(axis, mu, params):  # interface pylint: disable-msg=W0613

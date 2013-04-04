@@ -18,6 +18,7 @@ import resource
 
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
+from numpy.lib.stride_tricks import as_strided
 
 from mlmodels.experiment.crossvalid import folds
 from mlmodels.model.colfilter import SparseVectorDatabase
@@ -215,16 +216,29 @@ class SparseColfilterModel(object):
         self.vectorizor = KernelVectorizor.from_config(conf)
         self.model = SparseVectorDatabase.from_config(conf)
         self.vecs = None
-        self.ck_cnt = None
 
     def train(self, trail_set):
         """ Train the model
         """
         beeper = Beeper(self.logger, name='Training', deltacnt=100)
         for _, tr in enumerate(trail_set):
+            ck_cnt = NP.zeros(self.vectorizor.veclen, dtype=NP.byte)
+            for c in tr:
+                tick = self.vectorizor.get_timeslot(c['tick'])
+                ck_cnt[tick] += 1 \
+                    if ck_cnt[tick] < 200 else 0
+            segck = NP.sum(
+                as_strided(ck_cnt,
+                           shape=(ck_cnt.shape[0] - self.seglen + 1,
+                                  self.seglen),
+                           strides=(ck_cnt.itemsize, ck_cnt.itemsize)),
+                axis=1)
+            dsegck = segck[1:].reshape(
+                segck.shape[0] / self.seglen,
+                self.seglen)
             spvec = self.vectorizor.sp_process(tr)
             spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
-            self.model.extend_dataitems(spvec)
+            self.model.extend_dataitems(spvec, dsegck)
             beeper.beep()
         self.logger.info('Resource usage: {0}MB'.format(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))

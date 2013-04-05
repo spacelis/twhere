@@ -238,6 +238,7 @@ class SparseColfilterModel(object):
                 self.seglen)
             spvec = self.vectorizor.sp_process(tr)
             spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
+            spvec.info = tr[0]['trail_id']
             self.model.extend_dataitems(spvec, dsegck)
             beeper.beep()
         self.logger.info('Resource usage: {0}MB'.format(

@@ -69,16 +69,25 @@ def parse_parameter():
     """ Parse the argument
     """
     parser = argparse.ArgumentParser(description='Running Trail Prediction')
-    parser.add_argument('-f', dest='conffile',
-                        action='store',
-                        metavar='FILE',
-                        default=None,
-                        help='Running with delta configuration from the FILE')
     parser.add_argument(
-        '-s', dest='confstr', action='store', metavar='JSON', default=None,
+        '-f', dest='conffile',
+        action='store',
+        metavar='FILE',
+        default=None,
+        help='Running with delta configuration from the FILE')
+    parser.add_argument(
+        '-s',
+        dest='confstr',
+        action='store',
+        metavar='JSON',
+        default=None,
         help='Running with the delta configuration from the json string')
     parser.add_argument(
-        '-p', dest='pooled', action='store', default=None,
+        '-p', dest='pooled',
+        action='store',
+        nargs=2,
+        metavar=('POOLSIZE', 'FILE'),
+        default=None,
         help='Running a list of configuration in a multiprocess pool')
     args = parser.parse_args()
     return args
@@ -96,8 +105,8 @@ if __name__ == '__main__':
 
     appargs = parse_parameter()
     if appargs.pooled is not None:
-        with open(appargs.pooled) as fconf:
-            pooling([json.loads(l) for l in fconf], 5)
+        with open(appargs.pooled[1]) as fconf:
+            pooling([json.loads(l) for l in fconf], appargs.pooled[0])
     if appargs.conffile is not None:
         with open(appargs.conffile) as fconf:
             dconf = json.loads(fconf.read())

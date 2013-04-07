@@ -107,6 +107,7 @@ if __name__ == '__main__':
     if appargs.pooled is not None:
         with open(appargs.pooled[1]) as fconf:
             pooling([json.loads(l) for l in fconf], int(appargs.pooled[0]))
+        exit(0)
     if appargs.conffile is not None:
         with open(appargs.conffile) as fconf:
             dconf = json.loads(fconf.read())

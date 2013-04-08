@@ -18,11 +18,12 @@ from multiprocessing import Pool
 from twhere.exprmodels import experiment
 from twhere.config import Configuration
 
-CITY = dict(zip(['NY', 'CH', 'LA', 'SF'],
+CITY = dict(zip(['NY', 'CH', 'LA', 'SF', 'X'],
                 ['27485069891a7938',
                  '1d9a5370a355ab0c',
                  '3b77caf94bfc81fe',
-                 '5a110d312052166f']))
+                 '5a110d312052166f',
+                 'test']))
 
 LOGGING_CONF = {'version': 1,
                 'formatters': {
@@ -96,12 +97,6 @@ if __name__ == '__main__':
     setup_logging(LOGGING_CONF)
     LOGGER = logging.getLogger(__name__)
     LOGGER.debug('DEBUG is enabled')
-    #try:
-        #import resource
-        #resource.setrlimit(resource.RLIMIT_AS, (800 * 1024 * 1024L, -1L))
-    #except ValueError as err:
-        #LOGGER.warn('Failed set resource limits. Because {0}'.format(
-            #err.message))
 
     appargs = parse_parameter()
     if appargs.pooled is not None:

@@ -33,14 +33,14 @@ rm %(output)s)\
 HADOOP_OPT_PY27_CONFSTR = """\
 source @0/opt_py27/opt_envs && \
 (cd @1/twhere && python twhere/runner2.py -s \
-'%(jstr)s' && \
-hadoop fs -put %(output)s %(outdir)s && \
-rm %(output)s)\
+'%(jstr)s' && mkdir -p /tmp/wl-tud && \
+hadoop fs -put /tmp/wl-tud/%(output)s %(outdir)s && \
+rm /tmp/wl-tud/%(output)s\
 """
 
 SERVER_CONFSTR = """\
 (mkdir -p %(dir)s && python twhere/runner2.py -s \
-'%(jstr)s' 2> %(log)s) &\
+'%(jstr)s') &\
 """
 
 CITY = ['NY', 'CH', 'LA', 'SF']
@@ -52,50 +52,38 @@ def dict2str(adict):
     return '_'.join([('%s_%s' % (k, v)) for k, v in adict.iteritems()])
 
 
-def print_cityloop_hadoop(conf,
-                          exprname,
-                          tmpprefix='/tmp/wl-tudelft-',
-                          outdir='test'):
+def print_cityloop(conf, args):
     """ loop over city
     """
+    exprname = args.exprname
+    outdir = 'test' \
+        if args.outdir is None else args.outdir
     aconf = dict(conf)
     for c in CITY:
         aconf['expr.city.name'] = c
         for f in range(10):
             aconf['expr.fold_id'] = f
-            aconf['expr.output'] = ''.join([tmpprefix,
-                                           c,
+            aconf['expr.output'] = ''.join([c,
                                            '_',
                                            exprname,
+                                           '_',
                                            dict2str(conf),
                                            '_',
                                            str(f),
                                            '.res'])
-            print HADOOP_OPT_PY27_CONFSTR % {'jstr': json.dumps(aconf),
-                                             'tmpprefix': tmpprefix,
-                                             'output': aconf['expr.output'],
-                                             'outdir': outdir}
+            print args.template % {'jstr': json.dumps(aconf),
+                                   'output': aconf['expr.output'],
+                                   'outdir': outdir}
 
 
-def print_cityloop_server(conf, exprname, outdir='test'):
-    """ loop over city
+def print_script(conf, args):
+    """ Parsing the multiple parameters in the conf
     """
-    aconf = dict(conf)
-    for c in CITY:
-        aconf['expr.city.name'] = c
-        for f in range(10):
-            aconf['expr.fold_id'] = f
-            aconf['expr.output'] = ''.join([outdir,
-                                           '/',
-                                           c,
-                                           '_',
-                                           exprname,
-                                           '_',
-                                           str(f),
-                                           '.res'])
-            print SERVER_CONFSTR % {'jstr': json.dumps(aconf),
-                                    'dir': outdir,
-                                    'log': aconf['expr.output'] + '.log'}
+    param_names = [k for k, v in conf.iteritems if isinstance(v, list)]
+    for param_set in product(*[conf[param_names[k]] for k in param_names]):
+        c = dict(conf)
+        c.update(dict([(k, v) for k, v in zip(param_names, param_set)]))
+        print_cityloop(conf, args)
 
 
 def parse_parameter():
@@ -125,25 +113,17 @@ def parse_parameter():
                         default=False,
                         help='Treat each delta object as a set of '
                         'parameters')
-    subparsers = parser.add_subparsers(dest='cmd')
-    parser_hadoop = subparsers.add_parser('hadoop')
-    parser_server = subparsers.add_parser('server')
-    parser_hadoop.add_argument('-t', '--tmpprefix',
-                               dest='tmpprefix',
-                               default='/tmp/wl-tudelft-',
-                               help='The the prefix for accessing tmp '
-                               'folder with name')
-    parser_hadoop.add_argument('-o', '--output-dir',
-                               dest='output',
-                               default='test',
-                               help='The folder on HDFS for gathering '
-                               'the result files')
-
-    parser_server.add_argument('-o', '--output-dir',
-                               dest='output',
-                               default='test',
-                               help='The folder on HDFS for gathering '
-                               'the result files')
+    parser.add_argument('-h',
+                        dest='hadoop',
+                        action='store_true',
+                        default=False,
+                        help='Generating sh script for BashWorkers'
+                        'on Hadoop')
+    parser.add_argument('-o', '--output-dir',
+                        dest='output',
+                        default='test',
+                        help='The folder on HDFS for gathering '
+                        'the result files')
     args = parser.parse_args()
     return args
 
@@ -156,23 +136,13 @@ def utility():
         conf = dict()
     else:
         conf = json.loads(args.confstr)
-
+    args.template = HADOOP_OPT_PY27_CONFSTR \
+        if args.hadoop else SERVER_CONFSTR
     if args.expand is True:
-        valueset = list(conf.itervalues())
-        for a in product(*valueset):
-            aconf = dict(zip(conf.keys(), a))
-            if args.cmd == 'hadoop':
-                print_cityloop_hadoop(aconf,
-                                      args.name,
-                                      args.tmpprefix,
-                                      args.output)
-            elif args.cmd == 'server':
-                print_cityloop_server(aconf, args.name)
+        print_script(conf, args)
     else:
-        if args.cmd == 'hadoop':
-            print_cityloop_hadoop(conf, args.name, args.tmpprefix, args.output)
-        elif args.cmd == 'server':
-            print_cityloop_server(conf, args.name)
+        print_cityloop(conf, args)
+
 
 if __name__ == '__main__':
     utility()

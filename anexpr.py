@@ -33,7 +33,7 @@ rm %(output)s)\
 
 HADOOP_OPT_PY27_CONFSTR = """\
 source @0/opt_py27/opt_envs && mkdir -p /tmp/wl-tud && \
-(cd @1/twhere && python twhere/runner2.py -s '%(jstr)s' && \
+cd @1/twhere && python twhere/runner2.py -s '%(jstr)s' && \
 hadoop fs -put %(output)s %(outdir)s && \
 rm -rf %(output)s\
 """
@@ -73,7 +73,7 @@ def print_withfolds(aconf, args):
         aconf['expr.fold_id'] = f
         aconf['expr.output'] = ''.join([outdir, '/',
                                         aconf['expr.city.name'], '_',
-                                        aconf['expr.name'], '_',
+                                        args.name, '_',
                                         str(f),
                                         '.res'])
         print_template(aconf, args)
@@ -83,7 +83,7 @@ def print_cityloop(conf, args):
     """ loop over city
     """
     aconf = dict(conf)
-    aconf['expr.name'] = args.name[0] + '_' + dict2str(conf)
+    args.name = args.name[0] + '_' + dict2str(conf)
     for c in CITY:
         aconf['expr.city.name'] = c
         if args.withfolds:

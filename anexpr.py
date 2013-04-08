@@ -10,6 +10,7 @@ Description:
 __version__ = '0.0.1'
 
 
+import re
 import json
 import argparse
 from itertools import product
@@ -31,15 +32,14 @@ rm %(output)s)\
 """
 
 HADOOP_OPT_PY27_CONFSTR = """\
-source @0/opt_py27/opt_envs && \
-(cd @1/twhere && python twhere/runner2.py -s \
-'%(jstr)s' && mkdir -p /tmp/wl-tud && \
-hadoop fs -put /tmp/wl-tud/%(output)s %(outdir)s && \
-rm /tmp/wl-tud/%(output)s\
+source @0/opt_py27/opt_envs && mkdir -p /tmp/wl-tud && \
+(cd @1/twhere && python twhere/runner2.py -s '%(jstr)s' && \
+hadoop fs -put %(output)s %(outdir)s && \
+rm -rf %(output)s\
 """
 
 SERVER_CONFSTR = """\
-(mkdir -p %(dir)s && python twhere/runner2.py -s \
+(mkdir -p %(outdir)s && python twhere/runner2.py -s \
 '%(jstr)s') &\
 """
 
@@ -49,41 +49,57 @@ CITY = ['NY', 'CH', 'LA', 'SF']
 def dict2str(adict):
     """ convert a dict into a string
     """
-    return '_'.join([('%s_%s' % (k, v)) for k, v in adict.iteritems()])
+    s = '_'.join([('%s%s' % (k, v)) for k, v in adict.iteritems()])
+    return re.sub(r'[\[\] \(\)]', '_', s)
+
+
+def print_template(aconf, args):
+    """ print the final script
+    """
+    print args.template % {'jstr': json.dumps(aconf),
+                           'output': aconf['expr.output'],
+                           'outdir': args.hadoop}
+
+
+def print_withfolds(aconf, args):
+    """ loop over folds
+    """
+    folds = DEFAULT_CONFIG['expr.folds']
+    if 'expr.folds' in aconf:
+        folds = aconf['expr.folds']
+    outdir = 'test' \
+        if args.outdir is None else args.outdir
+    for f in range(folds):
+        aconf['expr.fold_id'] = f
+        aconf['expr.output'] = ''.join([outdir, '/',
+                                        aconf['expr.city.name'], '_',
+                                        aconf['expr.name'], '_',
+                                        str(f),
+                                        '.res'])
+        print_template(aconf, args)
 
 
 def print_cityloop(conf, args):
     """ loop over city
     """
-    exprname = args.exprname
-    outdir = 'test' \
-        if args.outdir is None else args.outdir
     aconf = dict(conf)
+    aconf['expr.name'] = args.name[0] + '_' + dict2str(conf)
     for c in CITY:
         aconf['expr.city.name'] = c
-        for f in range(10):
-            aconf['expr.fold_id'] = f
-            aconf['expr.output'] = ''.join([c,
-                                           '_',
-                                           exprname,
-                                           '_',
-                                           dict2str(conf),
-                                           '_',
-                                           str(f),
-                                           '.res'])
-            print args.template % {'jstr': json.dumps(aconf),
-                                   'output': aconf['expr.output'],
-                                   'outdir': outdir}
+        if args.withfolds:
+            print_withfolds(aconf, args)
+        else:
+            print_template(aconf, args)
 
 
 def print_script(conf, args):
     """ Parsing the multiple parameters in the conf
     """
-    param_names = [k for k, v in conf.iteritems if isinstance(v, list)]
-    for param_set in product(*[conf[param_names[k]] for k in param_names]):
-        c = dict(conf)
-        c.update(dict([(k, v) for k, v in zip(param_names, param_set)]))
-        print_cityloop(conf, args)
+    param_names = [k for k, v in conf.iteritems() if isinstance(v, list)]
+    for param_set in product(*[conf[k] for k in param_names]):
+        aconf = dict(conf)
+        aconf.update(dict([(k, v) for k, v in zip(param_names, param_set)]))
+        print_cityloop(aconf, args)
 
 
 def parse_parameter():
@@ -93,19 +109,18 @@ def parse_parameter():
         description='Scripting experiments',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='Default Configuration:\n' + pformat(DEFAULT_CONFIG))
-    parser.add_argument('-s',
+    parser.add_argument('-i',
                         dest='confstr',
                         action='store',
                         metavar='JSON',
                         default=None,
                         help='Running with the delta configuration '
                         'from the json string')
-    parser.add_argument('-n',
-                        dest='name',
-                        required=True,
+    parser.add_argument(dest='name',
                         action='store',
                         default='expr',
                         metavar='NAME',
+                        nargs=1,
                         help='The name for the experiment')
     parser.add_argument('-e',
                         dest='expand',
@@ -113,17 +128,30 @@ def parse_parameter():
                         default=False,
                         help='Treat each delta object as a set of '
                         'parameters')
-    parser.add_argument('-h',
-                        dest='hadoop',
-                        action='store_true',
-                        default=False,
-                        help='Generating sh script for BashWorkers'
-                        'on Hadoop')
-    parser.add_argument('-o', '--output-dir',
-                        dest='output',
+    arg_group = parser.add_mutually_exclusive_group()
+    arg_group.add_argument('-b',
+                           dest='hadoop',
+                           action='store',
+                           default=None,
+                           metavar='HDFSDIR',
+                           help='Generating sh script for BashWorkers '
+                           'on Hadoop and store the res in HDFS')
+    arg_group.add_argument('-s',
+                           dest='server',
+                           action='store_true',
+                           default=False,
+                           help='Generating sh script for multiprocess '
+                           'pooling')
+    parser.add_argument('-F',
+                        dest='withfolds',
+                        action='store_false',
+                        default=True,
+                        help='Generating scipts with different folds '
+                        'for each concrete conf')
+    parser.add_argument('-o',
+                        dest='outdir',
                         default='test',
-                        help='The folder on HDFS for gathering '
-                        'the result files')
+                        help='The folder to which the res files go')
     args = parser.parse_args()
     return args
 
@@ -136,8 +164,12 @@ def utility():
         conf = dict()
     else:
         conf = json.loads(args.confstr)
-    args.template = HADOOP_OPT_PY27_CONFSTR \
-        if args.hadoop else SERVER_CONFSTR
+    if args.hadoop:
+        args.template = HADOOP_OPT_PY27_CONFSTR
+    elif args.server:
+        args.template = SERVER_CONFSTR
+    else:
+        args.template = '%(jstr)s'
     if args.expand is True:
         print_script(conf, args)
     else:

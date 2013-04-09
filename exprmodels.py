@@ -241,6 +241,7 @@ class SparseColfilterModel(object):
             spvec.info = tr[0]['trail_id']
             self.model.extend_dataitems(spvec, dsegck)
             beeper.beep()
+        self.logger.info('Sparse Vector indexed {0}'.format(len(self.model.vecs)))
         self.logger.info('Resource usage: {0}MB'.format(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 

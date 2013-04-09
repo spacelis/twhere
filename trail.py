@@ -22,12 +22,29 @@ from mlmodels.utils.spindex import SparseVector
 
 
 EPSILON = 1e-10
+inv_sqrt2pi = 1 / NP.sqrt(2 * NP.pi)
 
 
 # ---------------------------------------------
 # KERNELS
 #
 def gaussian_pdf(axis, mu, params):
+    """ Generate a sample of Gaussian distribution (mu, ss) in interval with
+        veclen samples
+
+        Arguments:
+            axis -- a vector of x coordinates each element of which is a sample
+                    point
+            mu -- a float indication the mean of Gaussian distribution
+            sigma -- a float indicating the sigma of Gaussian distribution
+    """
+    (sigma,) = params
+    s = (axis - mu) / sigma
+    return inv_sqrt2pi / sigma * NP.exp(-0.5 * NP.square(s))
+
+
+# producing good result
+def gaussian_pdf2(axis, mu, params):
     """ Generate a sample of Gaussian distribution (mu, ss) in interval with
         veclen samples
 

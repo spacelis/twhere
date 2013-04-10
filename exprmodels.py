@@ -241,7 +241,8 @@ class SparseColfilterModel(object):
             spvec.info = tr[0]['trail_id']
             self.model.extend_dataitems(spvec, dsegck)
             beeper.beep()
-        self.logger.info('Sparse Vector indexed {0}'.format(len(self.model.vecs)))
+        self.logger.info('Sparse Vector indexed {0}'.format(
+                         len(self.model.vecs)))
         self.logger.info('Resource usage: {0}MB'.format(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
 
@@ -252,6 +253,9 @@ class SparseColfilterModel(object):
         vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
 
         est = self.model.estimates(vec, t)
+        if len(est.shape) != 2:
+            self.logger.warn('No similar vectors found for {0}'.format(
+                             tr[0]['trail_id']))
         rank = sorted(self.namespace,
                       key=lambda x: est[self.mapping(x), -1],
                       reverse=True)

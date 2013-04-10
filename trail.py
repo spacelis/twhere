@@ -28,6 +28,7 @@ inv_sqrt2pi = 1 / NP.sqrt(2 * NP.pi)
 # ---------------------------------------------
 # KERNELS
 #
+# have defacts of very small values
 def gaussian_pdf(axis, mu, params):
     """ Generate a sample of Gaussian distribution (mu, ss) in interval with
         veclen samples

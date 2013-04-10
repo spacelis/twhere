@@ -97,6 +97,11 @@ if __name__ == '__main__':
     setup_logging(LOGGING_CONF)
     LOGGER = logging.getLogger(__name__)
     LOGGER.debug('DEBUG is enabled')
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (1500 * 1024 * 1024L, -1L))
+    except ValueError as err:
+        LOGGER.warn('Failed set resource limits. Because {0}'.format(err.message))
 
     appargs = parse_parameter()
     if appargs.pooled is not None:

@@ -27,7 +27,8 @@ CITY = dict(zip(['NY', 'CH', 'LA', 'SF'],
 LOGGING_CONF = {'version': 1,
                 'formatters': {
                 'simple': {'format':
-                           "%(asctime)s %(process)d %(name)s [%(levelname)s] %(message)s"}
+                           "%(asctime)s %(process)d %(name)s "
+                           "[%(levelname)s] %(message)s"}
                 },
                 'handlers': {
                     'console': {'class': 'logging.StreamHandler',
@@ -90,10 +91,20 @@ def parse_parameter():
         metavar=('POOLSIZE', 'FILE'),
         default=None,
         help='Running a list of configuration in a multiprocess pool')
+    parser.add_argument(
+        '--loglevel', dest='log_level',
+        action='store',
+        metavar='INFO',
+        default='INFO',
+        help='The level of log output')
+
     args = parser.parse_args()
     return args
 
 if __name__ == '__main__':
+    appargs = parse_parameter()
+    if appargs.log_level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+        LOGGING_CONF['root']['level'] = appargs.log_level
     setup_logging(LOGGING_CONF)
     LOGGER = logging.getLogger(__name__)
     LOGGER.debug('DEBUG is enabled')
@@ -104,7 +115,6 @@ if __name__ == '__main__':
         LOGGER.warn('Failed set resource limits. Because {0}'.
                     format(err.message))
 
-    appargs = parse_parameter()
     if appargs.pooled is not None:
         with open(appargs.pooled[1]) as fconf:
             pooling([json.loads(l) for l in fconf], int(appargs.pooled[0]))

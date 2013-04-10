@@ -256,6 +256,7 @@ class SparseColfilterModel(object):
         if len(est.shape) != 2:
             self.logger.warn('No similar vectors found for {0}'.format(
                              tr[0]['trail_id']))
+            return self.namespace
         rank = sorted(self.namespace,
                       key=lambda x: est[self.mapping(x), -1],
                       reverse=True)

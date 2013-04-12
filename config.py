@@ -32,11 +32,11 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'cf.simnum': 20,
                   'cf.similarity': 'SparseCosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
-                  'expr.city.name': 'NY',
-                  'expr.city.id': '27485069891a7938',
+                  'expr.city.name': None,    # Must be override
+                  'expr.city.id': None,
                   'expr.target': 'base',
                   'expr.model': 'SparseColfilterModel',
-                  'expr.output': None,    # Must be override
+                  'expr.output': None,
                   'expr.folds': 10,
                   'expr.fold_id': None,   # None for running all folds
                   'data.namespace': None  # overrided during data loading phase

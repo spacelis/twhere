@@ -22,12 +22,13 @@ from mlmodels.utils.spindex import SparseVector
 
 
 EPSILON = 1e-10
-SQRTBIPI = NP.sqrt(2 * NP.pi)
+inv_sqrt2pi = 1 / NP.sqrt(2 * NP.pi)
 
 
 # ---------------------------------------------
 # KERNELS
 #
+# have defacts of very small values
 def gaussian_pdf(axis, mu, params):
     """ Generate a sample of Gaussian distribution (mu, ss) in interval with
         veclen samples
@@ -40,10 +41,11 @@ def gaussian_pdf(axis, mu, params):
     """
     (sigma,) = params
     s = (axis - mu) / sigma
-    return NP.exp(-NP.square(s))
+    return inv_sqrt2pi / sigma * NP.exp(-0.5 * NP.square(s))
 
 
-def gaussian2_pdf(axis, mu, params):
+# producing good result
+def gaussian_pdf2(axis, mu, params):
     """ Generate a sample of Gaussian distribution (mu, ss) in interval with
         veclen samples
 
@@ -55,7 +57,7 @@ def gaussian2_pdf(axis, mu, params):
     """
     (sigma,) = params
     s = (axis - mu) / sigma
-    return NP.exp(-NP.square(s) * 0.5) / (SQRTBIPI * sigma)
+    return NP.exp(-NP.square(s))
 
 
 def uniform_pdf(axis, mu, params):  # interface pylint: disable-msg=W0613

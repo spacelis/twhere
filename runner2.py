@@ -18,17 +18,17 @@ from multiprocessing import Pool
 from twhere.exprmodels import experiment
 from twhere.config import Configuration
 
-CITY = dict(zip(['NY', 'CH', 'LA', 'SF', 'X'],
+CITY = dict(zip(['NY', 'CH', 'LA', 'SF'],
                 ['27485069891a7938',
                  '1d9a5370a355ab0c',
                  '3b77caf94bfc81fe',
-                 '5a110d312052166f',
-                 'test']))
+                 '5a110d312052166f']))
 
 LOGGING_CONF = {'version': 1,
                 'formatters': {
                 'simple': {'format':
-                           "%(asctime)s %(name)s [%(levelname)s] %(message)s"}
+                           "%(asctime)s %(process)d %(name)s "
+                           "[%(levelname)s] %(message)s"}
                 },
                 'handlers': {
                     'console': {'class': 'logging.StreamHandler',
@@ -56,7 +56,8 @@ def prepare_and_run(deltaconf):
     """
     conf = Configuration()
     conf.update(deltaconf)
-    conf['expr.city.id'] = CITY[conf['expr.city.name']]
+    if conf['expr.city.id'] is None:
+        conf['expr.city.id'] = CITY[conf['expr.city.name']]
     experiment(conf)
 
 
@@ -90,15 +91,30 @@ def parse_parameter():
         metavar=('POOLSIZE', 'FILE'),
         default=None,
         help='Running a list of configuration in a multiprocess pool')
+    parser.add_argument(
+        '--loglevel', dest='log_level',
+        action='store',
+        metavar='INFO',
+        default='INFO',
+        help='The level of log output')
+
     args = parser.parse_args()
     return args
 
 if __name__ == '__main__':
+    appargs = parse_parameter()
+    if appargs.log_level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+        LOGGING_CONF['root']['level'] = appargs.log_level
     setup_logging(LOGGING_CONF)
     LOGGER = logging.getLogger(__name__)
     LOGGER.debug('DEBUG is enabled')
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (1500 * 1024 * 1024L, -1L))
+    except ValueError as err:
+        LOGGER.warn('Failed set resource limits. Because {0}'.
+                    format(err.message))
 
-    appargs = parse_parameter()
     if appargs.pooled is not None:
         with open(appargs.pooled[1]) as fconf:
             pooling([json.loads(l) for l in fconf], int(appargs.pooled[0]))

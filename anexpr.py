@@ -43,13 +43,13 @@ SERVER_CONFSTR = """\
 '%(jstr)s') &\
 """
 
-CITY = ['NY', 'CH', 'LA', 'SF']
-
 
 def dict2str(adict):
     """ convert a dict into a string
     """
-    s = '_'.join([('%s%s' % (k, v)) for k, v in adict.iteritems()])
+    s = '_'.join([('%s%s' % (k, v))
+                  for k, v in adict.iteritems()
+                  if k != 'expr.city.name'])
     return re.sub(r'[\[\] \(\)]', '_', s)
 
 
@@ -73,33 +73,24 @@ def print_withfolds(aconf, args):
         aconf['expr.fold_id'] = f
         aconf['expr.output'] = ''.join([outdir, '/',
                                         aconf['expr.city.name'], '_',
-                                        args.name, '_',
+                                        args.exprname, '_',
                                         str(f),
                                         '.res'])
         print_template(aconf, args)
 
 
-def print_cityloop(conf, args):
-    """ loop over city
-    """
-    aconf = dict(conf)
-    args.name = args.name[0] + '_' + dict2str(conf)
-    for c in CITY:
-        aconf['expr.city.name'] = c
-        if args.withfolds:
-            print_withfolds(aconf, args)
-        else:
-            print_template(aconf, args)
-
-
-def print_script(conf, args):
+def expand_script(conf, args):
     """ Parsing the multiple parameters in the conf
     """
     param_names = [k for k, v in conf.iteritems() if isinstance(v, list)]
     for param_set in product(*[conf[k] for k in param_names]):
         aconf = dict(conf)
         aconf.update(dict([(k, v) for k, v in zip(param_names, param_set)]))
-        print_cityloop(aconf, args)
+        args.exprname = args.name[0] + '_' + dict2str(aconf)
+        if args.withfolds:
+            print_withfolds(aconf, args)
+        else:
+            print_template(aconf, args)
 
 
 def parse_parameter():
@@ -171,9 +162,9 @@ def utility():
     else:
         args.template = '%(jstr)s'
     if args.expand is True:
-        print_script(conf, args)
+        expand_script(conf, args)
     else:
-        print_cityloop(conf, args)
+        print_template(conf, args)
 
 
 if __name__ == '__main__':

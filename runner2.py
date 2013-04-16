@@ -10,6 +10,7 @@ Description:
 """
 __version__ = '0.0.1'
 
+import os
 import json
 import logging
 import logging.config
@@ -44,11 +45,23 @@ LOGGING_CONF = {'version': 1,
                 }
 
 
+def worker(lconf):
+    """ A worker function for wrapping prepare_and_run() with
+        CPU affinity assignment.
+    """
+    try:
+        import affinity
+        affinity.set_process_affinity_mask(os.getpid(), 0xffff)
+    except:
+        pass
+    prepare_and_run(lconf)
+
+
 def pooling(lconf, poolsize=10):
     """ Running the list of conf in a multiprocess pool
     """
     pool = Pool(poolsize)
-    pool.map(prepare_and_run, lconf)
+    pool.map(worker, lconf)
 
 
 def prepare_and_run(deltaconf):

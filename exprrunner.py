@@ -24,8 +24,10 @@ from twhere.config import Configuration
 # The expriment loop
 # -------------------------------------------------
 
-CITY = zip(['NY', 'CH', 'LA', 'SF'],
-           ['27485069891a7938', '1d9a5370a355ab0c', '3b77caf94bfc81fe', '5a110d312052166f'])
+CITY = [('NY', '27485069891a7938'),
+        ('CH', '1d9a5370a355ab0c'),
+        ('LA', '3b77caf94bfc81fe'),
+        ('SF', '5a110d312052166f')]
 
 
 def run_experiment(conf, resdir, name, city_idx):
@@ -33,7 +35,8 @@ def run_experiment(conf, resdir, name, city_idx):
     """
     conf['expr.city.name'] = CITY[city_idx][0]
     conf['expr.city.id'] = CITY[city_idx][1]
-    conf['expr.output'] = os.path.join(resdir, '%s_%s.res' % (conf['expr.city.name'], name))
+    conf['expr.output'] = os.path.join(resdir, '%s_%s.res'
+                                       % (conf['expr.city.name'], name))
     experiment(conf)
 
 
@@ -163,9 +166,9 @@ if __name__ == '__main__':
         LOGGER.warn('Failed set resource limits.')
 
     city_idx = None if len(sys.argv) < 3 else int(sys.argv[2])
-    #experimentPredictingLast('base', resdir, city_idx)
-    #experimentMarkovModel('base', resdir, city_idx)
-    #experimentPredictingMajority('base', resdir, city_idx)
-    #experimentPredictingTimeMajority('base', resdir, city_idx)
-    experimentColfilter('base', resdir, city_idx)
+    experimentPredictingLast('category', resdir, city_idx)
+    experimentMarkovModel('category', resdir, city_idx)
+    experimentPredictingMajority('category', resdir, city_idx)
+    experimentPredictingTimeMajority('category', resdir, city_idx)
+    #experimentColfilter('base', resdir, city_idx)
     #mockTrainTextExport('base', resdir, city_idx)

@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.testing import assert_equal
 from mlmodels.utils.spindex import vec_intersect, from_dense
-from mlmodels.model.colfilter import CosineSimilarity, SparseCosineSimilarity
+from mlmodels.model.colfilter import CosineSimilarity, SparseCosineSimilarity, SparseSQRTCosineSimilarity
 from datetime import timedelta, datetime
 from twhere.trail import KernelVectorizor
 
@@ -29,9 +29,11 @@ def test_spcos_densecos():
     assert_equal(b, spb.densify())
     cs = CosineSimilarity()
     spcs = SparseCosineSimilarity()
+    spsqcs = SparseSQRTCosineSimilarity()
     aa = np.array([a], dtype=np.float32)
     print 'Dense', cs.measure_with_mask(aa, b, np.array([True]))[0]
     print 'Sparse', spcs.sp_measure(spb, [spa])[0]
+    print 'SQRTSparse', spsqcs.sp_measure(spb, [spa])[0]
     print 'STD', np.dot(a.reshape(-1), b.reshape(-1)) / \
             (np.sqrt(np.dot(a.reshape(-1),a.reshape(-1))) *
              np.sqrt(np.dot(b.reshape(-1),b.reshape(-1))))

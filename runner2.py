@@ -19,6 +19,11 @@ from multiprocessing import Pool
 from twhere.exprmodels import experiment
 from twhere.config import Configuration
 
+try:
+    import affinity
+except:
+    pass
+
 CITY = dict(zip(['NY', 'CH', 'LA', 'SF'],
                 ['27485069891a7938',
                  '1d9a5370a355ab0c',
@@ -50,7 +55,6 @@ def worker(lconf):
         CPU affinity assignment.
     """
     try:
-        import affinity
         affinity.set_process_affinity_mask(os.getpid(), 0xffff)
     except:
         pass

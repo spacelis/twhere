@@ -10,6 +10,7 @@ Description:
 __version__ = '0.0.1'
 
 
+import os
 import re
 import json
 import argparse
@@ -71,11 +72,12 @@ def print_withfolds(aconf, args):
         if args.outdir is None else args.outdir
     for f in range(folds):
         aconf['expr.fold_id'] = f
-        aconf['expr.output'] = ''.join([outdir, '/',
-                                        aconf['expr.city.name'], '_',
-                                        args.exprname, '_',
-                                        str(f),
-                                        '.res'])
+        aconf['expr.output'] = ''.join(
+            [os.path.join(outdir, aconf['expr.city.name']),
+             '_',
+             args.exprname, '_',
+             str(f),
+             '.res'])
         print_template(aconf, args)
 
 

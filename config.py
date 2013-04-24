@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'discounting.params': {'l': 1 / 3600.},
                   'cf.segment': 100,
                   'cf.simnum': 20,
-                  'cf.similarity': 'SparseCosineSimilarity',
+                  'cf.similarity': 'CosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
                   'expr.city.name': None,    # Must be override
                   'expr.city.id': None,

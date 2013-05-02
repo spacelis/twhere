@@ -10,10 +10,12 @@ History:
 __version__ = '0.2.0'
 __author__ = 'SpaceLis'
 
+import os
 import logging
 from datetime import timedelta
 from collections import Counter
 import resource
+from random import shuffle
 
 import numpy as NP
 NP.seterr(all='warn', under='ignore')
@@ -95,6 +97,26 @@ class PredictingTimeMajority(object):
                       reverse=True)
 
 
+class RandomGuess(object):
+    """ Random guess
+    """
+    def __init__(self, conf):
+        super(RandomGuess, self).__init__()
+        self.namespace = conf['data.namespace']
+
+    def train(self, trail_set):
+        """ Train model
+        """
+        pass
+
+    def predict(self, tr, tick):  # pylint: disable-msg=W0613
+        """ Predicting the check-in at tick
+        """
+        rank = list(self.namespace)
+        shuffle(rank)
+        return rank
+
+
 class PredictingLast(object):
     """ Always predicting the last
     """
@@ -103,7 +125,7 @@ class PredictingLast(object):
         self.logger = logging.getLogger(
             '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
-        self.fallback = PredictingTimeMajority(conf)
+        self.fallback = globals()[conf['predlast.fallback']](conf)
 
     def train(self, trail_set):
         """ Train model

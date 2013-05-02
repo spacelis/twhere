@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'cf.simnum': 20,
                   'cf.similarity': 'CosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
+                  'predlast.fallback': 'RandomGuess',
                   'expr.city.name': None,    # Must be override
                   'expr.city.id': None,
                   'expr.target': 'base',

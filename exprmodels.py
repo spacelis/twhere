@@ -11,7 +11,6 @@ __version__ = '0.2.0'
 __author__ = 'SpaceLis'
 
 import logging
-from random import shuffle
 from datetime import timedelta
 from collections import Counter
 import resource
@@ -104,19 +103,19 @@ class PredictingLast(object):
         self.logger = logging.getLogger(
             '%s.%s' % (__name__, type(self).__name__))
         self.namespace = conf['data.namespace']
+        self.fallback = PredictingTimeMajority(conf)
 
     def train(self, trail_set):
         """ Train model
         """
-        pass
+        self.fallback.train(trail_set)
 
-    def predict(self, tr, tick):  # pylint: disable-msg=W0613
+    def predict(self, tr, tick):
         """ predicting the last
         """
-        rank = list(self.namespace)
-        shuffle(rank)
+        rank = self.fallback.predict(tr, tick)
         pos = rank.index(tr[-1]['poi'])
-        rank[0], rank[pos] = rank[pos], rank[0]
+        rank.insert(0, rank.pop(pos))
         return rank
 
 
@@ -287,7 +286,8 @@ def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
                 continue
             if filters:
                 for f in filters:
-                    segtrail = [st for st in segtrail if f(st)]
+                    if not f(segtrail):
+                        continue
             if len(segtrail) < 2:  # make sure at least a transition
                 continue
             yield segtrail

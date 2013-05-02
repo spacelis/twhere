@@ -312,6 +312,12 @@ def experiment(conf):  # pylint: disable-msg=R0914
     data_provider = TextData(conf['expr.city.id'], conf['expr.target'])
     conf['data.namespace'] = data_provider.get_namespace()
     data = data_provider.get_data()
+    outdir = os.path.dirname(conf['expr.output'])
+    if not os.path.isdir(outdir):
+        if os.path.exists(outdir):
+            raise OSError('Cannot mkdir')
+        else:
+            os.mkdir(outdir)
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
     filters = [globals()[f] for f in conf['expr.filters']]

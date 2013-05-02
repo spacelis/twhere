@@ -12,7 +12,9 @@ Description:
 __version__ = '0.0.2'
 
 
+import sys
 import os
+import argparse
 from mlmodels.evaluate.mrr import mrr
 import numpy as NP
 from texttable import Texttable
@@ -21,16 +23,19 @@ from texttable import Texttable
 PREFICES = ['NY', 'CH', 'LA', 'SF']
 
 
-def eval_dir(path):
+def eval_dir(path, markdown=False):
     """ Evaluate the results in the dir by MRR
 
         Argument:
             dirname -- the path to the diretory containing evaluation results
     """
     files = sorted(os.listdir(path))
-    names = sorted(set([n.rsplit('.', 1)[0][3:] for n in files if n.endswith('.res')]))
+    names = sorted(set([n.rsplit('.', 1)[0][3:] for n in files if n.endswith('.res')]), key=lambda item: (len(item), item))
     table = Texttable()
-    table.set_deco(Texttable.HEADER)
+    if markdown:
+        table.set_asmarkdown()
+    else:
+        table.set_deco(0)
     table.set_cols_dtype(['t', 'f', 'f', 'f', 'f'])
     table.set_cols_align(["l", "r", "r", "r", "r"])
     table.set_precision(4)
@@ -48,5 +53,18 @@ def eval_dir(path):
 
 
 if __name__ == '__main__':
-    import sys
-    eval_dir(sys.argv[1])
+    parser = argparse.ArgumentParser(
+        description='Evaluating experiment results',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-m',
+                        dest='markdown',
+                        action='store_true',
+                        default=False,
+                        help='Enable markdown style')
+    parser.add_argument(dest='resdir',
+                        action='store',
+                        metavar='NAME',
+                        nargs=1,
+                        help='The name for the experiment')
+    args = parser.parse_args()
+    eval_dir(args.resdir[0], args.markdown)

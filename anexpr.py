@@ -44,6 +44,9 @@ SERVER_CONFSTR = """\
 '%(jstr)s') &\
 """
 
+ILLEGAL_CHARS = re.compile(r'[\[\] \(\)\'"]')
+UNICODE_LEADER = re.compile(r"u'")
+
 
 def dict2str(adict):
     """ convert a dict into a string
@@ -51,7 +54,9 @@ def dict2str(adict):
     s = '_'.join([('%s%s' % (k, v))
                   for k, v in adict.iteritems()
                   if k != 'expr.city.name'])
-    return re.sub(r'[\[\] \(\)]', '_', s)
+    s = UNICODE_LEADER.sub('', s)
+    s = ILLEGAL_CHARS.sub('_', s)
+    return s
 
 
 def print_template(aconf, args):

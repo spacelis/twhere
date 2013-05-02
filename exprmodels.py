@@ -323,6 +323,18 @@ def print_trail(trail):
     print zip(pois, ticks)
 
 
+def mkdir_p(dirname):
+    """ Try to mkdir
+    """
+    try:
+        os.mkdir(dirname)
+    except OSError as err:
+        if err.errno == 17:
+            if os.path.isdir(dirname):
+                return
+            raise err
+
+
 def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
@@ -335,11 +347,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
     conf['data.namespace'] = data_provider.get_namespace()
     data = data_provider.get_data()
     outdir = os.path.dirname(conf['expr.output'])
-    if not os.path.isdir(outdir):
-        if os.path.exists(outdir):
-            raise OSError('Cannot mkdir')
-        else:
-            os.mkdir(outdir)
+    mkdir_p(outdir)
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
     filters = [globals()[f] for f in conf['expr.filters']]

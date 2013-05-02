@@ -350,7 +350,9 @@ def experiment(conf):  # pylint: disable-msg=R0914
     mkdir_p(outdir)
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
-    filters = [globals()[f] for f in conf['expr.filters']]
+    filters = conf['expr.filters']
+    if filters:
+        filters = [globals()[f] for f in filters]
     total_trails = checkin_trails(data)
     numfold = conf['expr.folds']
     segperiod = conf['vec.unit'] * conf['cf.segment']

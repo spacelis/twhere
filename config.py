@@ -36,6 +36,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'expr.city.id': None,
                   'expr.target': 'base',
                   'expr.model': 'SparseColfilterModel',
+                  'expr.filters': None,
                   'expr.output': None,
                   'expr.folds': 10,
                   'expr.fold_id': None,   # None for running all folds

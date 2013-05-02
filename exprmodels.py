@@ -29,6 +29,9 @@ from twhere.trail import KernelVectorizor
 from twhere.trail import as_doublesegments
 from twhere.trail import as_mask
 from twhere.trail import as_vector_segments
+from twhere.trail import diff_last_filter  # pylint: disable-msg=W0611
+from twhere.trail import diff_all_filter  # pylint: disable-msg=W0611
+from twhere.trail import length_limits_filter  # pylint: disable-msg=W0611
 from twhere.dataprov import TextData
 from twhere.beeper import Beeper
 
@@ -270,7 +273,8 @@ def rank_ref(model, history, reftick, refpoi):
     return rank.index(refpoi) + 1
 
 
-def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24)):
+def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
+                       filters=None):
     """ generating testing instance
     """
     for trl in test_tr_set:
@@ -279,7 +283,12 @@ def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24)):
             segend = ref_checkin['tick']
             segstart = segend - segperiod
             segtrail = [c for c in trl if segstart < c['tick'] < segend]
-            if len(segtrail) < 2:
+            if len(segtrail) < 2:  # make sure enough check-ins for filter
+                continue
+            if filters:
+                for f in filters:
+                    segtrail = [st for st in segtrail if f(st)]
+            if len(segtrail) < 2:  # make sure at least a transition
                 continue
             yield segtrail
 
@@ -305,6 +314,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
     data = data_provider.get_data()
     output = open(conf['expr.output'], 'w')
     model = globals()[conf['expr.model']]
+    filters = [globals()[f] for f in conf['expr.filters']]
     total_trails = checkin_trails(data)
     numfold = conf['expr.folds']
     segperiod = conf['vec.unit'] * conf['cf.segment']
@@ -332,7 +342,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
         logger.info('Testing...[Output: {0}]'.format(output.name))
         statcounter = Counter()
         beeper = Beeper(logger, name='Testing', deltacnt=100)
-        for segtrl in iter_test_instance(test_tr_set, segperiod):
+        for segtrl in iter_test_instance(test_tr_set, segperiod, filters):
             htrl = segtrl[:-1]
             reftick = segtrl[-1]['tick']
             refpoi = segtrl[-1]['poi']

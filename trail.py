@@ -104,23 +104,22 @@ def checkin_trails(seq, key=lambda x: x['trail_id']):
 # Trail filters
 #
 
-def length_limits_filter(trails, minlen=2, maxlen=10000):
+def length_limits_filter(trail, minlen=2, maxlen=10000):
     """ Filter out shorter trails
     """
-    return itertools.ifilter(lambda x: minlen < x < maxlen, trails)
+    return minlen < len(trail) < maxlen
 
 
-def diff_last_filter(trails, key=lambda x: x['pid']):
+def diff_last_filter(trail, key=lambda x: x['pid']):
     """ Filter out trails with last two key different
     """
-    return itertools.ifilter(lambda x: key(x[-1]) != key(x[-2]), trails)
+    return key(trail[-1]) != key(trail[-2])
 
 
-def diff_all_filter(trails, key=lambda x: x['pid']):
+def diff_all_filter(trail, key=lambda x: x['pid']):
     """ Filter out trails with last key appeared before
     """
-    keyfunc = lambda x: key(x[-1]) not in set([key(c) for c in x])
-    return itertools.ifilter(keyfunc, trails)
+    return key(trail[-1]) not in set([key(c) for c in trail])
 
 
 def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):

@@ -183,11 +183,11 @@ class SimpleColfilterModel(object):
     def train(self, trail_set):
         """ training
         """
-        self.vecs = NP.zeros(len(trail_set), len(self.namespace),
+        self.vecs = NP.zeros((len(trail_set), len(self.namespace)),
                              dtype=NP.float32)
         for idx, tr in enumerate(trail_set):
             self.vecs[idx, :] = self.process(tr)
-        self.vecsnorm = NP.sqrt(self.vecs * self.vecs)
+        self.vecsnorm = NP.sqrt(NP.sum(self.vecs * self.vecs, axis=1))
         self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(
             self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
 
@@ -205,25 +205,26 @@ class SimpleColfilterModel(object):
         vec = self.process(trail)
         est = self.estimates(vec)
         rank = sorted(self.namespace,
-                      key=lambda x: est[self.mapping(x), -1],
+                      key=lambda x: est[self.mapping(x)],
                       reverse=True)
         return rank
 
     def estimates(self, vec):
         """ Estimate the vector
         """
-        sims, ents = self.most_similar_to(vec)
-        return NP.sum(sims.reshape(1, -1) * ents)
+        ents, sims = self.most_similar_to(vec)
+        return NP.sum(sims.reshape(-1, 1) * ents, axis=1)
 
     def most_similar_to(self, vec):
         """ Get top num most similar vectors
         """
-        vecnorm = NP.sqrt(vec * vec)
+        vecnorm = NP.sqrt(NP.sum(vec * vec))
         numerator = NP.sum(vec.reshape(1, -1) * self.vecs, axis=1)
         denominator = vecnorm * self.vecsnorm
         sims = numerator / denominator
         n_idc = BN.argpartsort(-sims, self.simnum, axis=None)[:self.simnum]
-        return [self.vecs[i] for i in n_idc], sims[n_idc]
+        return NP.array([self.vecs[i] for i in n_idc], dtype=NP.float32), \
+            NP.array(sims[n_idc], dtype=NP.float32)
 
 
 class ColfilterModel(object):

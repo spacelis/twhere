@@ -222,9 +222,12 @@ class SimpleColfilterModel(object):
         numerator = NP.sum(vec.reshape(1, -1) * self.vecs, axis=1)
         denominator = vecnorm * self.vecsnorm
         sims = numerator / denominator
-        n_idc = BN.argpartsort(-sims, self.simnum, axis=None)[:self.simnum]
-        return NP.array([self.vecs[i] for i in n_idc], dtype=NP.float32), \
-            NP.array(sims[n_idc], dtype=NP.float32)
+        if self.simnum > 0:
+            n_idc = BN.argpartsort(-sims, self.simnum, axis=None)[:self.simnum]
+            return NP.array([self.vecs[i] for i in n_idc], dtype=NP.float32), \
+                NP.array(sims[n_idc], dtype=NP.float32)
+        else:
+            return self.vecs, sims
 
 
 class ColfilterModel(object):

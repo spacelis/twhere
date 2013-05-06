@@ -213,7 +213,7 @@ class SimpleColfilterModel(object):
         """ Estimate the vector
         """
         ents, sims = self.most_similar_to(vec)
-        return NP.sum(sims.reshape(-1, 1) * ents, axis=1)
+        return NP.sum(sims.reshape(-1, 1) * ents, axis=0)
 
     def most_similar_to(self, vec):
         """ Get top num most similar vectors
@@ -222,7 +222,7 @@ class SimpleColfilterModel(object):
         numerator = NP.sum(vec.reshape(1, -1) * self.vecs, axis=1)
         denominator = vecnorm * self.vecsnorm
         sims = numerator / denominator
-        if self.simnum > 0:
+        if 0 < self.simnum < sims.shape[0]:
             n_idc = BN.argpartsort(-sims, self.simnum, axis=None)[:self.simnum]
             return NP.array([self.vecs[i] for i in n_idc], dtype=NP.float32), \
                 NP.array(sims[n_idc], dtype=NP.float32)

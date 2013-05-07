@@ -57,7 +57,7 @@ if __name__ == '__main__':
     if not os.path.isdir(resdir):
         os.mkdir(resdir)
     name = os.listdir(folddir)
-    nam = set([n[:-6] for n in name if n[:2] in ['NY', 'CH', 'LA', 'SF']])
+    nam = set([n[:-6] for n in name if n.endswith('.res')])
     for n in nam:
         foutname = resdir + '/' + n + '.res'
         if os.path.exists(foutname):

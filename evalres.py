@@ -23,7 +23,7 @@ from texttable import Texttable
 PREFICES = ['NY', 'CH', 'LA', 'SF']
 
 
-def eval_dir(path, markdown=False):
+def eval_dir(path, markdown=False, dprefix=False):
     """ Evaluate the results in the dir by MRR
 
         Argument:
@@ -31,18 +31,22 @@ def eval_dir(path, markdown=False):
     """
     files = sorted(os.listdir(path))
     names = sorted(set([n.rsplit('.', 1)[0][3:] for n in files if n.endswith('.res')]), key=lambda item: (len(item), item))
+    if dprefix:
+        prefices = sorted(set([n[:2] for n in files]))
+    else:
+        prefices = PREFICES
     table = Texttable()
     if markdown:
         table.set_asmarkdown()
     else:
         table.set_deco(0)
-    table.set_cols_dtype(['t', 'f', 'f', 'f', 'f'])
-    table.set_cols_align(["l", "r", "r", "r", "r"])
+    table.set_cols_dtype(['t'] + ['f'] * len(prefices))
+    table.set_cols_align(['l'] + ['r'] * len(prefices))
     table.set_precision(4)
-    table.add_rows([['', ] + PREFICES])
+    table.add_rows([['', ] + prefices])
     for n in names:
         scores = list()
-        for prefix in PREFICES:
+        for prefix in prefices:
             try:
                 eva = NP.array([int(v) for v in open(os.path.join(path, '%s_%s.res' % (prefix, n)))], dtype=NP.float64)
                 scores.append(mrr(eva))
@@ -61,10 +65,15 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Enable markdown style')
+    parser.add_argument('-p',
+                        dest='dprefix',
+                        action='store_true',
+                        default=False,
+                        help='Dynamic changing prefix according to the content in resdir')
     parser.add_argument(dest='resdir',
                         action='store',
                         metavar='NAME',
                         nargs=1,
                         help='The name for the experiment')
     args = parser.parse_args()
-    eval_dir(args.resdir[0], args.markdown)
+    eval_dir(args.resdir[0], args.markdown, args.dprefix)

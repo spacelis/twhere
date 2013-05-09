@@ -65,6 +65,13 @@ if __name__ == '__main__':
                            resp=True):
                 continue
         with open(foutname, 'w') as fout:
+            skip = False  # Skip those experiments with missing folds
+            for i in range(10):
+                if not os.path.exists(folddir + '/' + n + '_' + str(i) + '.res'):
+                    skip = True
+                    print >>sys.stderr, folddir + '/' + n + '_' + str(i) + '.res'
+            if skip:
+                continue
             for i in range(10):
                 with open(folddir + '/' + n + '_' + str(i) + '.res') as fin:
                     for l in fin:

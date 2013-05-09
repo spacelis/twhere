@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'cf.simnum': 20,
                   'cf.similarity': 'CosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
+                  'spcf.use_spcombine': True,
                   'predlast.fallback': 'RandomGuess',
                   'expr.city.name': None,    # Must be override
                   'expr.city.id': None,
@@ -110,6 +111,11 @@ class Configuration(object):
 
     def __len__(self):
         return len(self.conf)
+
+    def __iter__(self):
+        """ docstring for __iter__
+        """
+        return self.conf.iteritems()
 
 if __name__ == '__main__':
     raise Exception('Should run experiment.py')

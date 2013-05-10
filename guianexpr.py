@@ -50,7 +50,8 @@ class AnexprGui(object):
 
         self.conf = Configuration()
         self.confvar = dict()
-        for idx, (k, v) in enumerate(self.conf, 7):
+        for idx, (k, v) in enumerate(sorted(self.conf,
+                                            key=lambda (x, y): x), 7):
             self.addEntry(k, str(v), self.confvar, idx)
         self.freqChanged()
 

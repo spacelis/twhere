@@ -457,6 +457,8 @@ def experiment(conf):  # pylint: disable-msg=R0914
             beeper.beep()
 
         logger.info('Tested trails: {0}'.format(statcounter['instances']))
+    output.flush()
+    output.close()
 
 
 if __name__ == '__main__':

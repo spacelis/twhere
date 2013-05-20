@@ -356,7 +356,7 @@ def rank_ref(model, history, reftick, refpoi):
     """ running the testing stage
     """
     rank = model.predict(history, reftick)
-    return rank.index(refpoi) + 1
+    return rank.index(refpoi) + 1, refpoi
 
 
 def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),

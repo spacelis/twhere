@@ -356,7 +356,7 @@ def rank_ref(model, history, reftick, refpoi):
     """ running the testing stage
     """
     rank = model.predict(history, reftick)
-    return rank.index(refpoi) + 1, refpoi
+    return rank.index(refpoi) + 1
 
 
 def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
@@ -452,7 +452,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
             reftick = segtrl[-1]['tick']
             refpoi = segtrl[-1]['poi']
 
-            print >> output, rank_ref(m, htrl, reftick, refpoi)
+            print >> output, rank_ref(m, htrl, reftick, refpoi), refpoi, segtrl[0]['trail_id']
             statcounter.update(['instances'])
             beeper.beep()
 

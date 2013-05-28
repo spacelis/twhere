@@ -27,6 +27,16 @@ prec1 = lambda x: precision(x, 1)
 
 NUMBER = re.compile(r'[-]?\d+[.]?\d*')
 
+SEPARATOR = re.compile(r'\s+')
+
+def iterrank(filename):
+    """ Iteratring through the results for rankings
+    """
+    with open(filename) as fin:
+        for line in fin:
+            rank, _ = SEPARATOR.split(line, 1)
+            yield int(rank)
+
 
 def eval_dir(path, markdown=False, dprefix=False,
              evalmethod=None, numlabel=False):
@@ -60,7 +70,7 @@ def eval_dir(path, markdown=False, dprefix=False,
         scores = list()
         for prefix in prefices:
             try:
-                eva = NP.array([int(v) for v in open(
+                eva = NP.array([v for v in iterrank(
                     os.path.join(path, '%s_%s.res' % (prefix, n)))],
                     dtype=NP.float64)
                 scores.append(ef(eva))

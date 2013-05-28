@@ -452,7 +452,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
             reftick = segtrl[-1]['tick']
             refpoi = segtrl[-1]['poi']
 
-            print >> output, rank_ref(m, htrl, reftick, refpoi)
+            print >> output, rank_ref(m, htrl, reftick, refpoi), refpoi, segtrl[0]['trail_id']
             statcounter.update(['instances'])
             beeper.beep()
 

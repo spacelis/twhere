@@ -78,7 +78,7 @@ class MySQLData(DataProvider):
 class TextData(DataProvider):
     """ Data provider from text files
     """
-    SEPARATOR = re.compile(r'\s+')
+    SEPARATOR = re.compile(r'\t')
 
     def __init__(self, datafile, nsfile):
         super(TextData, self).__init__()

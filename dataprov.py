@@ -11,6 +11,7 @@ Description:
 __version__ = '0.0.1'
 
 
+import re
 import logging
 from datetime import datetime, date, timedelta
 import numpy as NP
@@ -21,7 +22,10 @@ class DataProvider(object):
     """
     def __init__(self):
         super(DataProvider, self).__init__()
-        self.logger = logging.getLogger('%s.%s' % (__name__, type(self).__name__))
+        self.data = None
+        self.namespace = None
+        self.logger = logging.getLogger(
+            '%s.%s' % (__name__, type(self).__name__))
 
     def get_namespace(self):
         """ Return the list of unique labels in poicol
@@ -32,6 +36,7 @@ class DataProvider(object):
         """ Return a list of checkins
         """
         return self.data
+
 
 class MySQLData(DataProvider):
     """ Data provide from MySQL
@@ -47,9 +52,10 @@ class MySQLData(DataProvider):
         elif self.poicol == 'category':
             idname = 'id'
             colname = 'category'
-        self.conn = sql.connect(user='root',
-                                read_default_file='/home/wenli/devel/mysql/my.cnf',
-                                db='geotweet')
+        self.conn = sql.connect(
+            user='root',
+            read_default_file='/home/wenli/devel/mysql/my.cnf',
+            db='geotweet')
         cur = self.conn.cursor(cursorclass=sql.cursors.DictCursor)
         cur.execute('select distinct %s as id from category' % (idname,))
         self.namespace = [c['id'] for c in cur]
@@ -72,6 +78,8 @@ class MySQLData(DataProvider):
 class TextData(DataProvider):
     """ Data provider from text files
     """
+    SEPARATOR = re.compile(r'\s+')
+
     def __init__(self, datafile, nsfile):
         super(TextData, self).__init__()
         datapath = 'data/%s_%s_data.table' % (datafile, nsfile)
@@ -81,8 +89,11 @@ class TextData(DataProvider):
         self.namespace = list()
         with open(datapath) as fin:
             for line in fin:
-                tr_id, poi, tick, pid = line.strip().split('\t')
-                tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'), 'pid': pid}
+                tr_id, poi, tick, pid = TextData.SEPARATOR.split(line.strip())
+                tmp = {'trail_id': tr_id,
+                       'poi': poi,
+                       'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'),
+                       'pid': pid}
                 self.data.append(tmp)
         with open(nspath) as fin:
             for line in fin:
@@ -95,7 +106,8 @@ class RandomData(DataProvider):
     def __init__(self, nsfile, length=3, number=3000):
         super(RandomData, self).__init__()
         nspath = 'data/%s_ns.table' % (nsfile,)
-        self.logger.info('Random data provider: length=' + str(length) + ', ' + nspath)
+        self.logger.info('Random data provider: length=%d, %s' %
+                         (length, nspath))
         self.namespace = list()
         with open(nspath) as fin:
             for line in fin:
@@ -108,7 +120,11 @@ class RandomData(DataProvider):
             for _ in range(int(length)):
                 tr_id = str(idx)
                 poi = self.namespace[NP.random.randint(len(self.namespace))]
-                tick = str(datetime.fromordinal(date.today().toordinal()) + timedelta(seconds=NP.random.randint(3600 * 24)))
+                tick = str(datetime.fromordinal(date.today().toordinal()) +
+                           timedelta(seconds=NP.random.randint(3600 * 24)))
                 pid = str(NP.random.randint(10000))
-                tmp = {'trail_id': tr_id, 'poi': poi, 'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'), 'pid': pid}
+                tmp = {'trail_id': tr_id,
+                       'poi': poi,
+                       'tick': datetime.strptime(tick, '%Y-%m-%d %H:%M:%S'),
+                       'pid': pid}
                 self.data.append(tmp)

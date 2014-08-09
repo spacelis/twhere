@@ -291,10 +291,14 @@ def str2timedelta(s):
     """
     if not isinstance(s, str):
         raise ValueError('Expected str() but: ' + str(type(s)))
-    if s[-1] == 'm':
+    if s[-1] == 's':
+        return timedelta(seconds=int(s[:-1]))
+    elif s[-1] == 'm':
         return timedelta(minutes=int(s[:-1]))
     elif s[-1] == 'h':
         return timedelta(hours=int(s[:-1]))
+    else:
+        return timedelta(seconds=int(s))
 
 
 class Vectorizor(object):
@@ -318,8 +322,8 @@ class Vectorizor(object):
         self.epoch = epoch
         self.eschatos = eschatos
 
-        self.unit = unit.total_seconds()
-        self.veclen = (self.eschatos - self.epoch).total_seconds() / self.unit
+        self.unit = self.unit.total_seconds()
+        self.veclen = int((self.eschatos - self.epoch).total_seconds() / self.unit)
         self.timeparser = timeparser if timeparser is not None else lambda x: x
 
     def process(self, trail, target=None):

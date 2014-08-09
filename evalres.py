@@ -57,7 +57,7 @@ def eval_dir(path, markdown=False, dprefix=False,
         prefices = sorted(set([n[:2] for n in files]))
     else:
         prefices = PREFICES
-    table = Texttable()
+    table = Texttable(max_width=0)
     if markdown:
         table.set_asmarkdown()
     else:

@@ -107,19 +107,19 @@ def checkin_trails(seq, key=lambda x: x['trail_id']):
 def length_limits_filter(trail, minlen=2, maxlen=10000):
     """ Filter out shorter trails
     """
-    return minlen < len(trail) < maxlen
+    return trail if minlen < len(trail) < maxlen else None
 
 
 def diff_last_filter(trail, key=lambda x: x['pid']):
     """ Filter out trails with last two key different
     """
-    return key(trail[-1]) != key(trail[-2])
+    return trail if key(trail[-1]) != key(trail[-2]) else None
 
 
 def diff_all_filter(trail, key=lambda x: x['pid']):
     """ Filter out trails with last key appeared before
     """
-    return key(trail[-1]) not in set([key(c) for c in trail])
+    return trail if key(trail[-1]) not in set([key(c) for c in trail]) else None
 
 
 def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
@@ -130,6 +130,19 @@ def uniformed_last_filter(trails, key=lambda x: x['poi'], maximum=1):
         for _ in range(maximum):
             yield trls[NP.random.randint(len(trls))]
 
+
+def future_diminisher(trail, dt):
+    """ Remove the check-ins within :dt: ahead reference check-in.
+
+    :trail: a list of check-ins
+    :dt: the time window length for removing, int => x hours, timedelta => dt long
+    :returns: a modified trail.
+
+    """
+    if isinstance(dt, int):
+        dt = timedelta(hours=dt)
+    window_start = trail[-1]['tick'] - dt
+    return [c for c in trail if c['tick'] <= window_start] + [trail[-1]]
 
 # -------------------------------------------------
 # Trail segmentation

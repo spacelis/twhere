@@ -371,15 +371,13 @@ def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
             segtrail = [c for c in trl if segstart < c['tick'] < segend]
             if len(segtrail) < 2:  # make sure enough check-ins for filter
                 continue
-            if filters:
-                for f in filters:
-                    if not f(segtrail):
-                        break
-                else:
-                    if len(segtrail) > 2:  # make sure at least a transition
-                        yield segtrail
+            for f in filters:
+                segtrail = f(segtrail)
+                if segtrail is None:
+                    break
             else:
-                yield segtrail
+                if len(segtrail) >= 2:  # make sure at least a transition
+                    yield segtrail
 
 
 def print_trail(trail):

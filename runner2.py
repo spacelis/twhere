@@ -10,20 +10,22 @@ Description:
 """
 __version__ = '0.0.1'
 
+import sys
 import os
 import json
 import logging
 import logging.config
 import argparse
-import multiprocessing
+from multiprocessing import cpu_count
 from multiprocessing import Pool
 from twhere.exprmodels import experiment
 from twhere.config import Configuration
 
 try:
     import affinity
+    affinity.set_process_affinity_mask(os.getpid(), (1 << cpu_count()) - 1)
 except:  # pylint: disable-msg=W0702
-    pass
+    print >>sys.stderr, 'WARN: Fail on setting CPU affinity, check cpu loads!'
 
 CITY = dict(zip(['NY', 'CH', 'LA', 'SF'],
                 ['27485069891a7938',
@@ -57,10 +59,6 @@ def worker(lconf):
     """ A worker function for wrapping prepare_and_run() with
         CPU affinity assignment.
     """
-    try:
-        affinity.set_process_affinity_mask(os.getpid(), 0xffff)
-    except:  # pylint: disable-msg=W0702
-        pass
     prepare_and_run(lconf)
     with OUTPUT_LOCK:
         print '[SUCCEEDED]', lconf

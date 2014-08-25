@@ -151,7 +151,7 @@ def setup_logging(filename, default_path='logging.conf.yaml', default_level=logg
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print >> sys.stderr, 'No folder provided for results'
-        print >> sys.stderr, 'Usage: runtest.py <dir>'
+        print >> sys.stderr, 'Usage: exprrunner.py <dir>'
         sys.exit(-1)
     resdir = sys.argv[1]
     if not os.path.isdir(resdir):
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     LOGGER.debug('DEBUG is enabled')
     try:
         import resource
-        resource.setrlimit(resource.RLIMIT_AS, (2.5 * 1024 * 1024 * 1024L, -1L))
+        resource.setrlimit(resource.RLIMIT_AS, (3.5 * 1024 * 1024 * 1024L, -1L))
     except:
         LOGGER.warn('Failed set resource limits.')
 

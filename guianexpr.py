@@ -12,6 +12,8 @@ import Tkinter as tk
 import tkFileDialog as tkfd
 from twhere.config import Configuration
 import subprocess
+import re
+STRING = re.compile("^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class AnexprGui(object):
@@ -127,7 +129,7 @@ class AnexprGui(object):
         for name in self.confvar.iterkeys():
             if self.ischanged(name):
                 conf[name] = self.confvar[name]['var'].get()
-        confstr = "{" + ', '.join(['"%s":%s' % (k, v)
+        confstr = "{" + ', '.join(['"%s":%s' % (k, '"' + v + '"' if STRING.match(v) else v)
                                    for k, v in conf.iteritems()]) + "}"
         cmd = ['python', 'twhere/anexpr.py']
         cmd += [] if not self.doexpansion.get() else ['-e']
@@ -139,6 +141,8 @@ class AnexprGui(object):
         print ' '.join(cmd)
         with tkfd.asksaveasfile(mode='w', defaultextension='pconf') as fout:
             fout.write(subprocess.check_output(cmd))
+        print 'SAVED!'
+        self.frame.quit()
 
 if __name__ == '__main__':
     root = tk.Tk()

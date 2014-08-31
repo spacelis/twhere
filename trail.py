@@ -464,7 +464,6 @@ class KernelVectorizor(Vectorizor):
     def sp_process(self, trail):
         """ accumulating gaussian shaped function
         """
-        assert not self.normalized, 'Not applicable on sparse vectors'
         spvec = SparseVector([len(self.namespace), self.veclen])
         rveclist = list()
         vadd = rveclist.append
@@ -482,6 +481,9 @@ class KernelVectorizor(Vectorizor):
                                kernel=self.kernel))
         spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
         NP.add(spvec.rvecs, EPSILON, spvec.rvecs)  # insure not divided by zero
+        if self.normalized:
+            unity = NP.sum(vec, axis=0)
+            NP.divide(vec, unity, vec)
         return spvec
 
     def process(self, trail, target=None):

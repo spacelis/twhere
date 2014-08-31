@@ -12,11 +12,14 @@ __version__ = '0.0.1'
 
 import sys
 import os
+import traceback
 import json
 import logging
 import logging.config
 import argparse
+from StringIO import StringIO
 from multiprocessing import cpu_count
+from multiprocessing import RLock
 from multiprocessing import Pool
 from twhere.exprmodels import experiment
 from twhere.config import Configuration
@@ -52,16 +55,23 @@ LOGGING_CONF = {'version': 1,
                 }
                 }
 
-OUTPUT_LOCK = multiprocessing.RLock()
+OUTPUT_LOCK = RLock()
 
 
 def worker(lconf):
     """ A worker function for wrapping prepare_and_run() with
         CPU affinity assignment.
     """
-    prepare_and_run(lconf)
-    with OUTPUT_LOCK:
-        print '[SUCCEEDED]', lconf
+    try:
+        prepare_and_run(lconf)
+        with OUTPUT_LOCK:
+            print '[SUCCEEDED]', lconf
+    except Exception as e:
+        exc_buffer = StringIO()
+        traceback.print_exc(file=exc_buffer)
+        logging.error('Uncaught exception in worker process:\n%s',
+                      exc_buffer.getvalue())
+        raise e
 
 
 def pooling(lconf, poolsize=10):

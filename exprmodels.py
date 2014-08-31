@@ -363,6 +363,8 @@ def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
                        filters=None):
     """ generating testing instance
     """
+    if filters is None:
+        filters = []
     for trl in test_tr_set:
         trl = sorted(trl, key=lambda x: x['tick'])
         for ref_checkin in trl:
@@ -373,8 +375,8 @@ def iter_test_instance(test_tr_set, segperiod=timedelta(hours=24),
                 continue
             for f in filters:
                 segtrail = f(segtrail)
-                if segtrail is None:
-                    break
+                if segtrail is not None and len(segtrail) >= 2:
+                    yield segtrail
             else:
                 if len(segtrail) >= 2:  # make sure at least a transition
                     yield segtrail

@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
@@ -32,7 +31,7 @@ DEFAULT_CONFIG = {'vec.unit': datetime.timedelta(seconds=24 * 36),
                   'cf.simnum': 20,
                   'cf.similarity': 'CosineSimilarity',
                   'cf.aggregator': 'LinearCombination',
-                  'cf.reuse': False,
+                  'cf.combine_orig': False,
                   'spcf.use_spcombine': True,
                   'predlast.fallback': 'RandomGuess',
                   'expr.city.name': None,    # Must be override

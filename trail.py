@@ -164,7 +164,8 @@ class TrailVectorSegmentSet(object):
             Return:
                 a 5d array [offset, seg, time, user, poi]
         """
-        assert len(data.shape) == 3, 'Should be [time x user x poi]'
+        assert len(data.shape) == 3, \
+            'Parameter `data` should be [time x user x poi]'
         super(TrailVectorSegmentSet, self).__init__()
         self.length, self.user_num, self.poi_num = data.shape
         self.seglen = seglen
@@ -213,12 +214,12 @@ def as_vector_segments(data, ref, seglen):
     segment_num = (length - offset) / seglen
     longtrail_bytesize = poi_num * length * data.itemsize
     return as_strided(data,
-                      shape=(user_num, segment_num, 2, poi_num, seglen),
-                      strides=(longtrail_bytesize,
+                      shape=(2, user_num, segment_num, poi_num, seglen),
+                      strides=(offset * data.itemsize,
+                               longtrail_bytesize,
                                seglen * data.itemsize,
-                               offset * data.itemsize,
                                length * data.itemsize,
-                               data.itemsize))[:, :, 1, :, :]
+                               data.itemsize))[1, :, :, :, :]
 
 
 # This method is introduced for sparse vectors as a segment starting at any
@@ -399,12 +400,12 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((len(self.namespace), self.veclen),
+            vec = NP.zeros((self.veclen, len(self.namespace)),
                            dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[poi_id, tickslot] = 1
+            vec[tickslot, poi_id] = 1
         return vec
 
     def process_accum(self, trail, target=None):
@@ -413,12 +414,12 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((len(self.namespace), self.veclen),
+            vec = NP.zeros((self.veclen, len(self.namespace)),
                            dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[poi_id, tickslot] += 1
+            vec[tickslot, poi_id] += 1
         return vec
 
 

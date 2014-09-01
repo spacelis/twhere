@@ -251,21 +251,21 @@ class ColfilterModel(object):
         self.vectorizor = KernelVectorizor.from_config(conf)
         self.model = VectorDatabase.from_config(conf)
         self.vecs = None
-        self.ck_cnt = None
+        self.ck_timeline = None
 
     def train(self, trail_set):
         """ Train the model
         """
         self.vecs = NP.zeros((len(trail_set), len(self.namespace),
                               self.vectorizor.veclen), dtype=NP.float32)
-        self.ck_cnt = NP.zeros((len(trail_set), self.vectorizor.veclen),
-                               dtype=NP.byte)
+        self.ck_timeline = NP.zeros((len(trail_set), self.vectorizor.veclen),
+                                    dtype=NP.byte)
         for idx, tr in enumerate(trail_set):
             self.vecs[idx, :, :] = self.vectorizor.process(tr)
             for c in tr:
                 tick = self.vectorizor.get_timeslot(c['tick'])
-                self.ck_cnt[idx, tick] += 1 \
-                    if self.ck_cnt[idx, tick] < 200 else 0
+                self.ck_timeline[idx, tick] += 1 \
+                    if self.ck_timeline[idx, tick] < 200 else 0
         self.logger.info('Data Loaded: {0} ({1}) / {2} MB'.format(
             self.vecs.shape, self.vecs.dtype, self.vecs.nbytes / 1024 / 1024))
 
@@ -276,7 +276,7 @@ class ColfilterModel(object):
         vec = self.vectorizor.process(tr)[:, t - self.seglen + 1: t + 1]
 
         self.model.load_data(as_vector_segments(self.vecs, t, self.seglen))
-        mask = as_mask(self.ck_cnt, t, self.seglen, level=2)
+        mask = as_mask(self.ck_timeline, t, self.seglen, level=2)
         est = self.model.estimates_with_mask(vec, t, mask)
         rank = sorted(self.namespace,
                       key=lambda x: est[self.mapping(x), -1],
@@ -311,24 +311,24 @@ class SparseColfilterModel(object):
         """
         beeper = Beeper(self.logger, name='Training', deltacnt=100)
         for _, tr in enumerate(trail_set):
-            ck_cnt = NP.zeros(self.vectorizor.veclen, dtype=NP.byte)
+            ck_timeline = NP.zeros(self.vectorizor.veclen, dtype=NP.byte)
             for c in tr:
                 tick = self.vectorizor.get_timeslot(c['tick'])
-                ck_cnt[tick] += 1 \
-                    if ck_cnt[tick] < 200 else 0
-            segck = NP.sum(
-                as_strided(ck_cnt,
-                           shape=(ck_cnt.shape[0] - self.seglen + 1,
-                                  self.seglen),
-                           strides=(ck_cnt.itemsize, ck_cnt.itemsize)),
+                ck_timeline[tick] += 1 if ck_timeline[tick] < 200 else 0
+            seg_timeline = NP.sum(
+                as_strided(
+                    ck_timeline,
+                    shape=(ck_timeline.shape[0] - self.seglen + 1,
+                           self.seglen),
+                    strides=(ck_timeline.itemsize, ck_timeline.itemsize)),
                 axis=1)
-            dsegck = segck[1:].reshape(
-                segck.shape[0] / self.seglen,
+            dseg_timeline = seg_timeline[1:].reshape(
+                seg_timeline.shape[0] / self.seglen,
                 self.seglen)
             spvec = self.vectorizor.sp_process(tr)
             spvec.rvecs = as_doublesegments(spvec.rvecs, self.seglen)
             spvec.info = tr[0]['trail_id']
-            self.model.extend_dataitems(spvec, dsegck)
+            self.model.extend_dataitems(spvec, dseg_timeline)
             beeper.beep()
         self.logger.info('Sparse Vector indexed {0}'.format(
                          len(self.model.vecs)))
@@ -452,7 +452,8 @@ def experiment(conf):  # pylint: disable-msg=R0914
             reftick = segtrl[-1]['tick']
             refpoi = segtrl[-1]['poi']
 
-            print >> output, rank_ref(m, htrl, reftick, refpoi), refpoi, segtrl[0]['trail_id']
+            print >> output, rank_ref(m, htrl, reftick, refpoi), \
+                refpoi, segtrl[0]['trail_id']
             statcounter.update(['instances'])
             beeper.beep()
 

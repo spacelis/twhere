@@ -287,7 +287,7 @@ def as_mask(data, ref, seglen, level=1):
                                seglen * data.itemsize,
                                offset * data.itemsize,
                                data.itemsize))[:, :, 1, :]
-    return (NP.sum(segs, axis=2) >= level)
+    return NP.sum(segs, axis=2) >= level
 
 
 # -------------------------------------------------
@@ -381,7 +381,7 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
             self.process = self.process_accum
         else:
             self.process = self.process_binary
-        self.logger.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+        self.logger.info('CONFIG \n[{0}]: \n{1}'.format(type(self), str(self)))
 
     @classmethod
     def from_config(cls, conf):
@@ -446,7 +446,7 @@ class KernelVectorizor(Vectorizor):
             self.aggr = NP.add
         else:
             self.aggr = NP.fmax
-        self.logger.info('CONFIG [{0}]: {1}'.format(type(self), str(self)))
+        self.logger.info('CONFIG \n[{0}]: \n{1}'.format(type(self), str(self)))
 
     @classmethod
     def from_config(cls, conf):
@@ -483,8 +483,8 @@ class KernelVectorizor(Vectorizor):
         spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
         NP.add(spvec.rvecs, EPSILON, spvec.rvecs)  # insure not divided by zero
         if self.normalized:
-            unity = NP.sum(vec, axis=0)
-            NP.divide(vec, unity, vec)
+            unity = NP.sum(spvec.rvecs, axis=0)
+            NP.divide(spvec.rvecs, unity, spvec.rvecs)
         return spvec
 
     def process(self, trail, target=None):

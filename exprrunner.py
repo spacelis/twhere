@@ -9,6 +9,8 @@ Changes:
     0.0.1 The first version
 Description:
     running the experiments
+    This is Deprecated.
+    Use runner2.py instead
 """
 __version__ = '0.1.0'
 

@@ -55,7 +55,7 @@ class PredictingMajority(object):
         for tr in trail_set:
             self.dist.update([c['poi'] for c in tr])
         self.majority = [x[0] for x in self.dist.most_common()]
-        self.logger.info('Majority Class: %s' % (self.majority[0],))
+        self.logger.info('Majority Class: %s', self.majority[0])
 
     def predict(self, tr, tick):  # pylint: disable-msg=W0613
         """ predicting the last
@@ -310,7 +310,8 @@ class SparseColfilterModel(object):
     def train(self, trail_set):
         """ Train the model
         """
-        beeper = Beeper(self.logger, name='Training', deltacnt=100)
+        beeper = Beeper(self.logger, name='Training', deltacnt=100,
+                        showmsg=lambda: '%d MB' % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
         for _, tr in enumerate(trail_set):
             ck_timeline = NP.zeros(self.vectorizor.veclen, dtype=NP.byte)
             for c in tr:
@@ -447,7 +448,8 @@ def experiment(conf):  # pylint: disable-msg=R0914
 
         logger.info('Testing...[Output: {0}]'.format(output.name))
         statcounter = Counter()
-        beeper = Beeper(logger, name='Testing', deltacnt=100)
+        beeper = Beeper(logger, name='Testing', deltacnt=100,
+                        showmsg=lambda: '%d MB' % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000))
         for segtrl in iter_test_instance(test_tr_set, segperiod, filters):
             htrl = segtrl[:-1]
             reftick = segtrl[-1]['tick']

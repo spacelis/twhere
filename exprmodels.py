@@ -168,6 +168,7 @@ class MarkovChainModel(object):
 
 class SimpleColfilterModel(object):
     """ A simple colfilter model without considering time
+        which is basically a location recommender system
     """
     def __init__(self, conf):
         super(SimpleColfilterModel, self).__init__()

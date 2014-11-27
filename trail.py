@@ -379,8 +379,10 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
         super(BinaryVectorizor, self).__init__(namespace, **kargs)
         if accumulated:
             self.process = self.process_accum
+            self.sp_process = self.sp_process_accum
         else:
             self.process = self.process_binary
+            self.sp_process = self.sp_process_binary
         self.logger.info('CONFIG \n[{0}]: \n{1}'.format(type(self), str(self)))
 
     @classmethod
@@ -400,13 +402,32 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((self.veclen, len(self.namespace)),
+            vec = NP.zeros((len(self.namespace), self.veclen),
                            dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[tickslot, poi_id] = 1
+            vec[poi_id, tickslot] = 1
         return vec
+
+    def sp_process_binary(self, trail):
+        """ Binarily vectorizing the trail
+        """
+        spvec = SparseVector([len(self.namespace), self.veclen])
+        rveclist = list()
+        vadd = rveclist.append
+        kadd = spvec.keys.append
+        sortkey = lambda x: self.namespace.index(x['poi'])
+        groupkey = lambda x: x['poi']
+        sortedtrail = sorted(trail, key=sortkey)
+        for poi, checkins in itertools.groupby(sortedtrail, key=groupkey):
+            kadd(self.namespace.index(poi))
+            ticks = [self.get_timeslot(c['tick']) for c in checkins]
+            arr = NP.zeros(self.veclen)
+            arr[ticks] = 1
+            vadd(arr)
+        spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
+        return spvec
 
     def process_accum(self, trail, target=None):
         """ This will add more weight if one time slot gets more check-in
@@ -414,13 +435,33 @@ class BinaryVectorizor(Vectorizor):  # pylint: disable-msg=W0223
         if target is not None:
             vec = target
         else:
-            vec = NP.zeros((self.veclen, len(self.namespace)),
+            vec = NP.zeros((len(self.namespace), self.veclen),
                            dtype=NP.float32)
         for c in trail:
             poi_id = self.namespace.index(c['poi'])
             tickslot = self.get_timeslot(c['tick'])
-            vec[tickslot, poi_id] += 1
+            vec[poi_id, tickslot] += 1
         return vec
+
+    def sp_process_accum(self, trail):
+        """ Binarily vectorizing the trail
+        """
+        spvec = SparseVector([len(self.namespace), self.veclen])
+        rveclist = list()
+        vadd = rveclist.append
+        kadd = spvec.keys.append
+        sortkey = lambda x: self.namespace.index(x['poi'])
+        groupkey = lambda x: x['poi']
+        sortedtrail = sorted(trail, key=sortkey)
+        for poi, checkins in itertools.groupby(sortedtrail, key=groupkey):
+            kadd(self.namespace.index(poi))
+            ticks = [self.get_timeslot(c['tick']) for c in checkins]
+            arr = NP.zeros(self.veclen)
+            for t in ticks:
+                arr[t] += 1
+            vadd(arr)
+        spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
+        return spvec
 
 
 class KernelVectorizor(Vectorizor):
@@ -481,8 +522,8 @@ class KernelVectorizor(Vectorizor):
                                aggr=self.aggr,
                                kernel=self.kernel))
         spvec.rvecs = NP.array(rveclist, dtype=NP.float32)
-        NP.add(spvec.rvecs, EPSILON, spvec.rvecs)  # insure not divided by zero
         if self.normalized:
+            NP.add(spvec.rvecs, EPSILON, spvec.rvecs)  # insure not divided by zero
             unity = NP.sum(spvec.rvecs, axis=0)
             NP.divide(spvec.rvecs, unity, spvec.rvecs)
         return spvec
@@ -506,8 +547,8 @@ class KernelVectorizor(Vectorizor):
                                         self.params,
                                         aggr=self.aggr,
                                         kernel=self.kernel)
-        NP.add(vec, EPSILON, vec)  # make sure not divided by zero
         if self.normalized:
+            NP.add(vec, EPSILON, vec)  # make sure not divided by zero
             unity = NP.sum(vec, axis=0)
             NP.divide(vec, unity, vec)
         return vec

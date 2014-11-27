@@ -28,6 +28,7 @@ from mlmodels.model.colfilter import VectorDatabase
 from mlmodels.model.mm import MarkovModel
 from twhere.trail import checkin_trails
 from twhere.trail import KernelVectorizor
+from twhere.trail import BinaryVectorizor
 from twhere.trail import as_doublesegments
 from twhere.trail import as_mask
 from twhere.trail import as_vector_segments
@@ -249,7 +250,7 @@ class ColfilterModel(object):
                              enumerate(self.namespace)]).get
 
         # Prepare model with kernel specification
-        self.vectorizor = KernelVectorizor.from_config(conf)
+        self.vectorizor = globals()[conf['cf.vectorizor']].from_config(conf)
         self.model = VectorDatabase.from_config(conf)
         self.vecs = None
         self.ck_timeline = None
@@ -303,7 +304,7 @@ class SparseColfilterModel(object):
                              for idx, poi in enumerate(self.namespace)]).get
 
         # Prepare model with kernel specification
-        self.vectorizor = KernelVectorizor.from_config(conf)
+        self.vectorizor = globals()[conf['cf.vectorizor']].from_config(conf)
         self.model = SparseVectorDatabase.from_config(conf)
         self.vecs = None
 

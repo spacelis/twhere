@@ -409,7 +409,6 @@ def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
     logger = logging.getLogger('%s.%s' % (__name__, 'experiment'))
-    print >> output, '#', str(conf)
     logger.info('--------------------  Experimenting on {0}'
                 .format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))
@@ -420,6 +419,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
     outdir = os.path.dirname(conf['expr.output'])
     mkdir_p(outdir)
     output = open(conf['expr.output'], 'w')
+    print >> output, '#', str(conf)
     model = globals()[conf['expr.model']]
     filters = conf['expr.filters']
     if filters:

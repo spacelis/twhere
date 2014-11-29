@@ -409,6 +409,7 @@ def experiment(conf):  # pylint: disable-msg=R0914
     """ running the experiment
     """
     logger = logging.getLogger('%s.%s' % (__name__, 'experiment'))
+    print >> output, '#', str(conf)
     logger.info('--------------------  Experimenting on {0}'
                 .format(conf['expr.city.name']))
     logger.info('Reading data from {0}'.format(conf['expr.city.name']))

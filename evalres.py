@@ -34,6 +34,8 @@ def iterrank(filename):
     """
     with open(filename) as fin:
         for line in fin:
+            if line.startswith('#'):
+                continue
             rank, _ = SEPARATOR.split(line, 1)
             yield int(rank)
 

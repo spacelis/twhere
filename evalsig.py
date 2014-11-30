@@ -36,6 +36,13 @@ def read_score(resfile):
         return [1 / float(WHITESPACE.split(l)[0]) for l in fin if not l.startswith('#')]
 
 
+def modelname(s):
+    """ return the model name"""
+    try:
+        return MODELNAME.search(s).group(1)
+    except:
+        return 'CF-K'
+
 def printnotsig(res1, res2, city, level, threshold=0.05):
     """ Print x and y if they are not significant different, p is greater than threshold.
 
@@ -44,13 +51,18 @@ def printnotsig(res1, res2, city, level, threshold=0.05):
     :returns: None
 
     """
+
     x = read_score(res1)
     y = read_score(res2)
-    assert len(x) == len(y)
+    if len(x) != len(y):
+        m1 = modelname(res1)
+        m2 = modelname(res2)
+        print '%6s %2s %10s %30s %30s' % ('NA', city, level, m1, m2)
+        return
     _, p = wilcox(x, y, paired=True)
     if p > threshold:
-        m1 = MODELNAME.search(res1).group(1)
-        m2 = MODELNAME.search(res2).group(1)
+        m1 = modelname(res1)
+        m2 = modelname(res2)
         print '%.4f %2s %10s %30s %30s' % (p, city, level, m1, m2)
 
 

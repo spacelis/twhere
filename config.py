@@ -118,5 +118,8 @@ class Configuration(object):
         """
         return self.conf.iteritems()
 
+    def __str__(self):
+        return str(Configuration.flatten(self))
+
 if __name__ == '__main__':
     raise Exception('Should run experiment.py')
